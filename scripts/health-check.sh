@@ -161,7 +161,7 @@ main() {
     echo "--------------------"
     check_service "FastAPI Gateway" "http://localhost:$MAIN_API_PORT/health" || ((failed_checks++))
     check_service "LocalAI" "http://localhost:$LOCALAI_PORT/health" || ((failed_checks++))
-    check_service "Qdrant" "http://localhost:$QDRANT_PORT/health" || ((failed_checks++))
+    check_service "Qdrant" "http://localhost:$QDRANT_PORT/readyz" || ((failed_checks++))
     check_service "MinIO API" "http://localhost:$MINIO_API_PORT/minio/health/live" || ((failed_checks++))
     echo
     

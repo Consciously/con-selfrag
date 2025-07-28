@@ -8,13 +8,20 @@ WORKDIR /app
 RUN addgroup -g 1000 llmuser && \
     adduser -D -s /bin/sh -u 1000 -G llmuser llmuser
 
-# Install system dependencies
-RUN apk add --no-cache \
+# Install system dependencies with fallback mirrors
+RUN apk update --no-cache && \
+    apk add --no-cache \
     curl \
-    bash
+    bash || \
+    (apk add --no-cache --repository http://dl-3.alpinelinux.org/alpine/v3.22/main \
+    curl \
+    bash) || \
+    (apk add --no-cache --repository http://dl-4.alpinelinux.org/alpine/v3.22/main \
+    curl \
+    bash)
 
 # Copy dependency files first (for Docker layer caching)
-COPY --chown=llmuser:llmuser pyproject.toml ./
+COPY --chown=llmuser:llmuser pyproject.toml README.md ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -e .

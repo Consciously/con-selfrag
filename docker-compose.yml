@@ -60,7 +60,7 @@ services:
       - CONTEXT_SIZE=${LOCALAI_CONTEXT_SIZE:-2048}
       - DEBUG=${DEBUG:-false}
     volumes:
-      - ${LOCALAI_MODELS_PATH:-./models}:/models
+      - /mnt/assets/models:/models
       - localai-data:/tmp/localai
     restart: unless-stopped
     networks:
@@ -97,11 +97,11 @@ services:
     networks:
       - llm-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "sh", "-c", "timeout 5 bash -c '</dev/tcp/localhost/6333'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 60s
 
   # PostgreSQL Database
   postgres:

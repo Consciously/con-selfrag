@@ -75,3 +75,14 @@ models/*.yaml
 models/*.json
 !models/MODEL_CARD
 !models/en-us-amy-low.onnx.json
+
+# Large model files (GitHub LFS recommended)
+models/*.tar.gz
+models/*.zip
+models/*.7z
+models/voice-*
+models/*-voice-*
+models/*-large*
+models/*-base*
+models/*-small*
+models/*-medium*
