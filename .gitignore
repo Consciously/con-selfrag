@@ -63,3 +63,15 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+
+# Model files and directories
+models/*.gguf
+models/*.safetensors
+models/*.bin
+models/*.onnx
+models/*.partial
+models/*.tmp
+models/*.yaml
+models/*.json
+!models/MODEL_CARD
+!models/en-us-amy-low.onnx.json
