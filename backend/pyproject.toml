@@ -1,0 +1,52 @@
+[project]
+name = "localai-llm-template"
+version = "1.0.0"
+description = "Clean template for frontend-backend-AI architecture with LocalAI"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+
+# Minimal essential dependencies following YAGNI principles
+dependencies = [
+    "fastapi>=0.104.0",
+    "openai>=1.0.0",  # OpenAI client for LocalAI compatibility
+    "loguru>=0.7.0",
+    "pydantic>=2.0.0",
+    "uvicorn>=0.24.0",
+    "requests>=2.31.0",  # HTTP requests for tests and utilities
+    "httpx>=0.25.0",  # Async HTTP client
+]
+
+# Database dependencies (commented out for now - uncomment when needed)
+# "asyncpg>=0.29.0",        # PostgreSQL async driver
+# "sqlalchemy>=2.0.0",     # ORM for PostgreSQL
+# "qdrant-client>=1.7.0",  # Qdrant vector database client
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "requests>=2.31.0",  # HTTP requests for tests
+]
+
+# Database extras (uncomment when needed)
+# postgres = ["asyncpg>=0.29.0", "sqlalchemy>=2.0.0"]
+# qdrant = ["qdrant-client>=1.7.0"]
+# database = ["localai-llm-template[postgres,qdrant]"]
+
+[build-system]
+requires = ["hatchling>=1.18.0"]
+build-backend = "hatchling.build"
+
+# Configure hatchling to include the app directory
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
