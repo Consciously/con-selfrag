@@ -7,10 +7,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: fastapi-gateway
-    env_file:
-      - .env
     ports:
-      - "${MAIN_API_PORT:-8080}:8000"
+      - "8080:8000"
     environment:
       - LOCALAI_HOST=localai
       - LOCALAI_PORT=8080
@@ -20,160 +18,63 @@ services:
       - POSTGRES_PORT=5432
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-llama-3.2-1b-instruct}
-      - API_TIMEOUT=${API_TIMEOUT:-300}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    volumes:
-      - ./backend:/app
-      - ${DATA_PATH:-./data}:/app/data
-      - ${LOGS_PATH:-./logs}:/app/logs
     depends_on:
-      localai:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
+      - localai
+      - qdrant
+      - postgres
+      - redis
     networks:
       - llm-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   # LocalAI Service
   localai:
-    image: localai/localai:latest-aio-gpu-nvidia-cuda-12
+    image: localai/localai:latest-aio-cpu
     container_name: localai
-    env_file:
-      - .env
     ports:
-      - "${LOCALAI_PORT:-8081}:8080"
+      - "8081:8080"
     environment:
       - MODELS_PATH=/models
-      - THREADS=${LOCALAI_THREADS:-4}
-      - CONTEXT_SIZE=${LOCALAI_CONTEXT_SIZE:-2048}
-      - DEBUG=${DEBUG:-false}
     volumes:
-      - /mnt/assets/models:/models
-      - localai-data:/tmp/localai
-    restart: unless-stopped
+      - localai-data:/mnt/assets/models/llm
     networks:
       - llm-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
   # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
-    env_file:
-      - .env
     ports:
-      - "${QDRANT_PORT:-6333}:6333"
-    environment:
-      - QDRANT__LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - QDRANT__SERVICE__HTTP_PORT=6333
-      - QDRANT__SERVICE__GRPC_PORT=6334
+      - "6333:6333"
     volumes:
       - qdrant-data:/qdrant/storage
-    restart: unless-stopped
     networks:
       - llm-network
-    healthcheck:
-      test: ["CMD", "sh", "-c", "timeout 5 bash -c '</dev/tcp/localhost/6333'"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
 
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: postgres
-    env_file:
-      - .env
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "5432:5432"
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-con_selfrag}
-      - POSTGRES_USER=${POSTGRES_USER:-con_selfrag}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-con_selfrag_password}
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+      - POSTGRES_DB=con_selfrag
+      - POSTGRES_USER=con_selfrag
+      - POSTGRES_PASSWORD=con_selfrag_password
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
-    restart: unless-stopped
     networks:
       - llm-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-con_selfrag} -d ${POSTGRES_DB:-con_selfrag}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
   # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: redis
-    env_file:
-      - .env
     ports:
-      - "${REDIS_PORT:-6379}:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+      - "6379:6379"
     volumes:
       - redis-data:/data
-    restart: unless-stopped
     networks:
       - llm-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-
-  # Optional: Document Storage Service
-  minio:
-    image: minio/minio:latest
-    container_name: minio
-    env_file:
-      - .env
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin123}
-    volumes:
-      - minio-data:/data
-    command: server /data --console-address ":9001"
-    restart: unless-stopped
-    networks:
-      - llm-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 
 volumes:
   localai-data:
@@ -183,8 +84,6 @@ volumes:
   postgres-data:
     driver: local
   redis-data:
-    driver: local
-  minio-data:
     driver: local
 
 networks:
