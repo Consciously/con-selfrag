@@ -1,6 +1,8 @@
 """
-Enhanced Pydantic models with comprehensive OpenAPI documentation.
-Includes detailed examples and descriptions for better developer experience.
+Response models for API endpoints.
+
+This module contains all Pydantic models used for API responses.
+Each model includes comprehensive OpenAPI documentation and examples.
 """
 
 from __future__ import annotations
@@ -9,72 +11,6 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
-# Request Models
-class GenerateRequest(BaseModel):
-    """Request for text generation with comprehensive options."""
-
-    prompt: str = Field(
-        ...,
-        description="Input prompt for text generation",
-        example="Write a Python function to calculate fibonacci numbers",
-    )
-    model: str | None = Field(
-        None, description="Model name (uses default if not specified)", example="llama2"
-    )
-    temperature: float | None = Field(
-        0.7,
-        ge=0.0,
-        le=2.0,
-        description="Sampling temperature (0.0 = deterministic, 2.0 = very creative)",
-        example=0.7,
-    )
-    stream: bool | None = Field(
-        False,
-        description="Enable streaming response for real-time text generation",
-        example=False,
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "prompt": "Explain quantum computing in simple terms",
-                "model": "llama2",
-                "temperature": 0.7,
-                "stream": False,
-            }
-        }
-
-
-class AskRequest(BaseModel):
-    """Request for conversational question with context awareness."""
-
-    question: str = Field(
-        ...,
-        description="Question to ask the AI assistant",
-        example="What are the benefits of using Docker containers?",
-    )
-    model: str | None = Field(
-        None, description="Model name (uses default if not specified)", example="llama2"
-    )
-    temperature: float | None = Field(
-        0.7,
-        ge=0.0,
-        le=2.0,
-        description="Sampling temperature for response creativity",
-        example=0.7,
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "question": "How do I optimize FastAPI performance?",
-                "model": "llama2",
-                "temperature": 0.5,
-            }
-        }
-
-
-# Response Models
 class GenerateResponse(BaseModel):
     """Response for text generation with metadata."""
 
@@ -155,7 +91,6 @@ class ModelInfo(BaseModel):
         }
 
 
-# Health Check Models
 class HealthCheck(BaseModel):
     """Comprehensive health check response with service status."""
 
@@ -217,80 +152,21 @@ class ReadinessCheck(BaseModel):
         }
 
 
-# Error Models
 class ErrorResponse(BaseModel):
-    """Standard error response with comprehensive details."""
+    """Standardized error response format."""
 
-    error: str = Field(
-        ..., description="Error type/category", example="ValidationError"
-    )
-    message: str = Field(
-        ...,
-        description="Human-readable error message",
-        example="Invalid temperature value",
-    )
-    detail: str | None = Field(
-        None,
-        description="Additional error details for debugging",
-        example="Temperature must be between 0.0 and 2.0",
-    )
-    timestamp: str | None = Field(
-        None, description="Error timestamp", example="2024-01-15T10:30:00Z"
-    )
+    error: str = Field(..., description="Error type identifier", example="ValidationError")
+    message: str = Field(..., description="Human-readable error message", example="Invalid request parameters")
+    detail: str | None = Field(None, description="Detailed error information", example="Field 'prompt' is required")
+    timestamp: str = Field(..., description="Error timestamp", example="2024-01-15T10:30:00Z")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "error": "ModelNotFound",
-                "message": "The specified model is not available",
-                "detail": "Model 'gpt-4' not found in available models list",
+                "error": "ValidationError",
+                "message": "Invalid request parameters",
+                "detail": "Field 'prompt' is required",
                 "timestamp": "2024-01-15T10:30:00Z",
-            }
-        }
-
-
-# Metrics Models
-class MetricsResponse(BaseModel):
-    """Prometheus metrics response."""
-
-    metrics: str = Field(
-        ...,
-        description="Prometheus-formatted metrics data",
-        example='# HELP http_requests_total Total HTTP requests\n# TYPE http_requests_total counter\nhttp_requests_total{method="GET",endpoint="/health"} 42',
-    )
-
-
-# Ingest Models
-class IngestRequest(BaseModel):
-    """Request for ingesting data into the system."""
-
-    content: str = Field(
-        ...,
-        description="Content to be ingested into the system",
-        example="FastAPI is a modern, fast web framework for building APIs with Python 3.7+",
-    )
-    source: str = Field(
-        ...,
-        description="Source identifier for the ingested content",
-        example="user_input",
-    )
-    metadata: dict[str, Any] | None = Field(
-        None,
-        description="Additional metadata associated with the content",
-        example={"type": "text", "language": "en", "tags": ["api", "python"]},
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "content": "FastAPI is a modern, fast web framework for building APIs with Python 3.7+",
-                "source": "user_input",
-                "metadata": {
-                    "type": "text",
-                    "language": "en",
-                    "tags": ["api", "python", "documentation"],
-                    "author": "user",
-                },
             }
         }
 
@@ -318,38 +194,6 @@ class IngestResponse(BaseModel):
                 "status": "success",
                 "timestamp": "2024-01-15T10:30:00Z",
                 "content_length": 85,
-            }
-        }
-
-
-# Query Models
-class QueryRequest(BaseModel):
-    """Request for querying ingested data."""
-
-    query: str = Field(
-        ...,
-        description="Natural language query to search the ingested content",
-        example="What web frameworks are mentioned in the documents?",
-    )
-    limit: int | None = Field(
-        10,
-        ge=1,
-        le=100,
-        description="Maximum number of results to return",
-        example=10,
-    )
-    filters: dict[str, Any] | None = Field(
-        None,
-        description="Optional filters to apply to the search",
-        example={"source": "user_input", "tags": ["python"]},
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "query": "What web frameworks are mentioned in the documents?",
-                "limit": 5,
-                "filters": {"source": "user_input", "tags": ["python"]},
             }
         }
 
