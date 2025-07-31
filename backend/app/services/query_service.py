@@ -8,9 +8,10 @@ separating it from HTTP concerns and making it testable in isolation.
 import time
 from typing import Any
 
-from loguru import logger
-
 from ..models.response_models import QueryResponse, QueryResult
+from ..logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class QueryService:
@@ -48,9 +49,15 @@ class QueryService:
             # - Rank results by relevance
             # - Implement hybrid search (semantic + keyword)
 
-            logger.info(f"Processing query: '{query}' with limit={limit}")
-            if filters:
-                logger.info(f"Applying filters: {filters}")
+            logger.info(
+                "Processing query",
+                extra={
+                    "query": query,
+                    "limit": limit,
+                    "has_filters": bool(filters),
+                    "filter_keys": list(filters.keys()) if filters else []
+                }
+            )
 
             # Placeholder: Mock results for demonstration
             # In production, this would query the vector database
@@ -108,7 +115,14 @@ class QueryService:
             query_time_ms = int((time.time() - start_time) * 1000)
 
             logger.info(
-                f"Query returned {len(limited_results)} results in {query_time_ms}ms"
+                "Query processed successfully",
+                extra={
+                    "query": query,
+                    "total_results": len(filtered_results),
+                    "returned_results": len(limited_results),
+                    "query_time_ms": query_time_ms,
+                    "applied_filters": filters
+                }
             )
 
             return QueryResponse(
@@ -119,10 +133,18 @@ class QueryService:
             )
 
         except ValueError as e:
-            logger.error(f"Validation error during query: {str(e)}")
+            logger.error(
+                "Validation error during query",
+                extra={"error": str(e), "query": query},
+                exc_info=True
+            )
             raise
         except Exception as e:
-            logger.error(f"Query processing failed: {str(e)}")
+            logger.error(
+                "Query processing failed",
+                extra={"error": str(e), "query": query},
+                exc_info=True
+            )
             raise RuntimeError(f"Failed to process query: {str(e)}") from e
 
     def _matches_filters(
@@ -157,7 +179,15 @@ class QueryService:
 
             return True
 
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Error during filter matching",
+                extra={
+                    "error": str(e),
+                    "metadata": metadata,
+                    "filters": filters
+                }
+            )
             return False
 
     async def search_by_metadata(
@@ -174,7 +204,13 @@ class QueryService:
             QueryResponse with filtered results
         """
         try:
-            logger.info(f"Searching by metadata: {filters}")
+            logger.info(
+                "Searching by metadata",
+                extra={
+                    "filters": filters,
+                    "limit": limit
+                }
+            )
 
             # TODO: Implement actual metadata search
             # In production, this would query the database
@@ -188,5 +224,9 @@ class QueryService:
             )
 
         except Exception as e:
-            logger.error(f"Metadata search failed: {str(e)}")
+            logger.error(
+                "Metadata search failed",
+                extra={"error": str(e), "filters": filters},
+                exc_info=True
+            )
             raise RuntimeError(f"Failed to search by metadata: {str(e)}") from e

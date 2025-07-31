@@ -1,12 +1,17 @@
 """
-FastAPI application with clean, extensible architecture.
+FastAPI application with clean, extensible architecture and structured logging.
 """
 
-from fastapi import FastAPI
+import time
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
 from .routes import health, ingest, query
+from .logging_utils import get_logger, log_request
+
+# Initialize logger
+logger = get_logger(__name__)
 
 # Create FastAPI app with essential configuration
 app = FastAPI(
@@ -46,6 +51,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all incoming requests and their responses."""
+    start_time = time.time()
+    
+    # Log incoming request
+    logger.info(
+        "Incoming request",
+        extra=log_request(request)
+    )
+    
+    try:
+        response = await call_next(request)
+        
+        # Calculate duration
+        duration = time.time() - start_time
+        
+        # Log response
+        logger.info(
+            "Request completed",
+            extra=log_request(request, response, duration)
+        )
+        
+        return response
+        
+    except Exception as e:
+        # Log any unhandled exceptions
+        duration = time.time() - start_time
+        logger.error(
+            "Request failed",
+            extra=log_request(request, duration=duration, error=str(e)),
+            exc_info=True
+        )
+        raise
+
+# Log application startup
+@app.on_event("startup")
+async def startup_event():
+    """Log application startup."""
+    logger.info("🚀 Selfrag API starting up...")
+    logger.info(f"Server: {config.host}:{config.port}")
+    logger.info(f"LocalAI: {config.localai_base_url}")
+    logger.info(f"Default model: {config.default_model}")
+    logger.info(f"Log level: {config.log_level}")
+    logger.info(f"CORS origins: {config.cors_origins}")
+
+# Log application shutdown
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Log application shutdown."""
+    logger.info("🛑 Selfrag API shutting down...")
+
 # Include modular routes
 app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(ingest.router, prefix="/ingest", tags=["Ingestion"])
@@ -55,6 +113,7 @@ app.include_router(query.router, prefix="/query", tags=["Query"])
 @app.get("/")
 async def root():
     """Root endpoint with basic API information."""
+    logger.info("Root endpoint accessed")
     return {
         "name": "Selfrag API",
         "version": "1.0.0",
@@ -71,6 +130,7 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
 
+    logger.info("Starting development server...")
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

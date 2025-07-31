@@ -9,9 +9,10 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from loguru import logger
-
 from ..models.response_models import IngestResponse
+from ..logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class IngestService:
@@ -50,7 +51,15 @@ class IngestService:
             # - Index metadata for filtering
             # - Validate and sanitize content
 
-            logger.info(f"Ingesting content: {content_id} ({content_length} chars)")
+            logger.info(
+                "Ingesting content",
+                extra={
+                    "content_id": content_id,
+                    "content_length": content_length,
+                    "has_metadata": bool(metadata),
+                    "metadata_keys": list(metadata.keys()) if metadata else []
+                }
+            )
 
             # Placeholder: In production, this would store in database
             # For now, we'll just simulate successful ingestion
@@ -63,10 +72,18 @@ class IngestService:
             )
 
         except ValueError as e:
-            logger.error(f"Validation error during ingestion: {str(e)}")
+            logger.error(
+                "Validation error during ingestion",
+                extra={"error": str(e), "content_length": len(content) if content else 0},
+                exc_info=True
+            )
             raise
         except Exception as e:
-            logger.error(f"Ingestion failed: {str(e)}")
+            logger.error(
+                "Ingestion failed",
+                extra={"error": str(e), "content_length": len(content) if content else 0},
+                exc_info=True
+            )
             raise RuntimeError(f"Failed to ingest content: {str(e)}") from e
 
     async def batch_ingest(
@@ -93,15 +110,33 @@ class IngestService:
             if metadatas and len(metadatas) != len(contents):
                 raise ValueError("Metadatas list must match contents length")
 
+            logger.info(
+                "Starting batch ingestion",
+                extra={
+                    "batch_size": len(contents),
+                    "has_metadata": bool(metadatas)
+                }
+            )
+
             results = []
             for i, content in enumerate(contents):
                 metadata = metadatas[i] if metadatas else None
                 result = await self.ingest_content(content, metadata)
                 results.append(result)
 
-            logger.info(f"Batch ingested {len(results)} items successfully")
+            logger.info(
+                "Batch ingestion completed",
+                extra={
+                    "batch_size": len(results),
+                    "successful": len(results)
+                }
+            )
             return results
 
         except Exception as e:
-            logger.error(f"Batch ingestion failed: {str(e)}")
+            logger.error(
+                "Batch ingestion failed",
+                extra={"error": str(e), "batch_size": len(contents) if contents else 0},
+                exc_info=True
+            )
             raise RuntimeError(f"Failed to batch ingest: {str(e)}") from e
