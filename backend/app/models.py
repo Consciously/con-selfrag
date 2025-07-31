@@ -5,7 +5,8 @@ Includes detailed examples and descriptions for better developer experience.
 
 from __future__ import annotations
 
-from typing import Optional, List, Dict, Any
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -299,11 +300,11 @@ class IngestResponse(BaseModel):
     """Response for successful data ingestion."""
 
     id: str = Field(
-        ..., description="Unique identifier for the ingested content", example="doc_12345"
+        ...,
+        description="Unique identifier for the ingested content",
+        example="doc_12345",
     )
-    status: str = Field(
-        ..., description="Ingestion status", example="success"
-    )
+    status: str = Field(..., description="Ingestion status", example="success")
     timestamp: str = Field(
         ..., description="Ingestion timestamp", example="2024-01-15T10:30:00Z"
     )
@@ -387,13 +388,15 @@ class QueryResponse(BaseModel):
     """Response for query results."""
 
     query: str = Field(
-        ..., description="Original query string", example="What web frameworks are mentioned?"
+        ...,
+        description="Original query string",
+        example="What web frameworks are mentioned?",
     )
     results: list[QueryResult] = Field(
         ..., description="List of relevant results sorted by relevance"
     )
     total_results: int = Field(
-        ..., description="Total number of results found", example=3
+        ..., description="Total number of matching documents", example=42
     )
     query_time_ms: int = Field(
         ..., description="Query processing time in milliseconds", example=150

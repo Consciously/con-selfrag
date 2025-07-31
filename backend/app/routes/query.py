@@ -1,12 +1,10 @@
 """
-Content query routes for searching ingested data.
-
-This module provides endpoints for querying content using natural language
-search with filtering and ranking capabilities.
+Content query endpoints for searching ingested data.
 """
 
 import time
 from datetime import datetime
+
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 
@@ -24,19 +22,16 @@ query_service = QueryService()
     summary="Query ingested content",
     description="""
     Query ingested content using natural language search.
-    
     **Features:**
     - Natural language query processing
     - Relevance-based ranking
     - Metadata filtering
     - Pagination support
-    
     **Use Cases:**
     - Knowledge base search
     - Document retrieval
     - Content discovery
     - Q&A over ingested documents
-    
     **Note:** This is a placeholder implementation. In production, this would:
     - Use vector similarity search with embeddings
     - Implement hybrid search (semantic + keyword)
@@ -71,32 +66,29 @@ query_service = QueryService()
 async def query_content(request: QueryRequest):
     """Query ingested content using natural language search."""
     start_time = time.time()
-    
+
     try:
         logger.info(f"Processing query: {request.query}")
         if request.filters:
             logger.info(f"Applying filters: {request.filters}")
-        
+
         # Delegate to service layer
         result = await query_service.query_content(
-            query=request.query,
-            limit=request.limit,
-            filters=request.filters
+            query=request.query, limit=request.limit, filters=request.filters
         )
-        
+
         query_time_ms = int((time.time() - start_time) * 1000)
         logger.info(f"Query processed successfully in {query_time_ms}ms")
-        
+
         return result
-        
+
     except Exception as e:
         logger.error(f"Query processing error: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail={
-                "error": "QueryProcessingError",
-                "message": "Query processing failed",
-                "detail": str(e),
+                "error": "Query failed",
+                "message": str(e),
                 "timestamp": datetime.utcnow().isoformat() + "Z",
             },
         ) from e

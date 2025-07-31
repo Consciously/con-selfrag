@@ -10,8 +10,8 @@ __description__ = "Clean template for LLM applications with LocalAI backend"
 __author__ = "Your Name"
 __email__ = "your.email@example.com"
 
-from .main import app
 from .config import config
 from .localai_client import localai_client
+from .main import app
 
 __all__ = ["app", "config", "localai_client"]

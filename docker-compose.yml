@@ -1,11 +1,10 @@
-version: '3.8'
-
 services:
-  # FastAPI Gateway Service
+  # FastAPI Gateway Service - Runtime stage
   fastapi-gateway:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: runtime
     container_name: fastapi-gateway
     ports:
       - "8080:8000"
@@ -36,6 +35,37 @@ services:
     networks:
       - llm-network
 
+  # Lint Service - Development stage for code quality checks
+  lint:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: lint
+    command: >
+      sh -c "
+        echo 'Running code quality checks...' &&
+        echo '1. Black formatting check...' &&
+        black --check --diff . &&
+        echo '2. Ruff linting...' &&
+        ruff check . &&
+        echo '3. Import sorting check...' &&
+        isort --check-only --diff . &&
+        echo '4. Type checking...' &&
+        mypy app/ &&
+        echo '5. Running tests...' &&
+        pytest test_*.py -v &&
+        echo 'All checks passed!'
+      "
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - fastapi-gateway
+    networks:
+      - llm-network
+    profiles:
+      - dev
+
   # LocalAI Service
   localai:
     image: localai/localai:latest-aio-cpu
@@ -43,15 +73,16 @@ services:
     ports:
       - "8081:8080"
     environment:
-      - MODELS_PATH=/models
+      - CONFIG_FILE=/etc/localai/config.yaml
     volumes:
-      - localai-data:/mnt/assets/models/llm
+      - localai-data:/models
+      - ./backend/localai-config.yaml:/etc/localai/config.yaml
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/readyz"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 120s
     networks:
       - llm-network
 

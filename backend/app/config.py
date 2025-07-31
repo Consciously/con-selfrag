@@ -4,7 +4,7 @@ Flattened structure with only essential configuration options.
 """
 
 import os
-from typing import List
+
 from pydantic import BaseModel, Field
 
 
@@ -19,10 +19,12 @@ class Config(BaseModel):
     localai_host: str = Field(default="localhost", description="LocalAI host")
     localai_port: int = Field(default=8080, description="LocalAI port")
     localai_timeout: float = Field(default=30.0, description="LocalAI request timeout")
-    default_model: str = Field(default="llama-3.2-1b-instruct", description="Default model")
+    default_model: str = Field(
+        default="llama-3.2-1b-instruct", description="Default model"
+    )
 
     # CORS settings
-    cors_origins: List[str] = Field(default=["*"], description="Allowed CORS origins")
+    cors_origins: list[str] = Field(default=["*"], description="Allowed CORS origins")
 
     # Logging
     log_level: str = Field(default="INFO", description="Logging level")
@@ -50,10 +52,6 @@ def load_config() -> Config:
         default_model=os.getenv("DEFAULT_MODEL", "llama-3.2-1b-instruct"),
         cors_origins=os.getenv("CORS_ORIGINS", "*").split(","),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
-        # Database settings (commented for now)
-        # postgres_url=os.getenv("POSTGRES_URL", ""),
-        # qdrant_host=os.getenv("QDRANT_HOST", "localhost"),
-        # qdrant_port=int(os.getenv("QDRANT_PORT", "6333")),
     )
 
 
