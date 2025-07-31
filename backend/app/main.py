@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import config
 from .routes import health, ingest, query
 from .logging_utils import get_logger, log_request
+from .startup_check import startup_checks
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -90,19 +91,51 @@ async def log_requests(request: Request, call_next):
 # Log application startup
 @app.on_event("startup")
 async def startup_event():
-    """Log application startup."""
+    """Log application startup and run service checks."""
     logger.info("🚀 Selfrag API starting up...")
     logger.info(f"Server: {config.host}:{config.port}")
     logger.info(f"LocalAI: {config.localai_base_url}")
     logger.info(f"Default model: {config.default_model}")
     logger.info(f"Log level: {config.log_level}")
     logger.info(f"CORS origins: {config.cors_origins}")
+    
+    # Run comprehensive service checks
+    logger.info("Running startup service checks...")
+    try:
+        results = await startup_checks()
+        
+        if results["overall_status"] == "healthy":
+            logger.info("✅ All services healthy - API ready to serve requests", extra={
+                "postgres": results["services"]["postgres"]["status"],
+                "redis": results["services"]["redis"]["status"],
+                "qdrant": results["services"]["qdrant"]["status"]
+            })
+        else:
+            logger.warning("⚠️ Some services unhealthy - API may have limited functionality", extra={
+                "postgres": results["services"]["postgres"]["status"],
+                "redis": results["services"]["redis"]["status"],
+                "qdrant": results["services"]["qdrant"]["status"]
+            })
+            
+            # Log specific service issues
+            for service_name, service_result in results["services"].items():
+                if service_result["status"] != "healthy":
+                    logger.error(f"Service {service_name} is unhealthy", extra={
+                        "service": service_name,
+                        "status": service_result["status"],
+                        "error": service_result.get("error", "Unknown error")
+                    })
+                    
+    except Exception as e:
+        logger.error("❌ Startup service checks failed", extra={"error": str(e)}, exc_info=True)
+        logger.warning("API starting anyway - health checks available at /health/services")
 
 # Log application shutdown
 @app.on_event("shutdown")
 async def shutdown_event():
     """Log application shutdown."""
     logger.info("🛑 Selfrag API shutting down...")
+    logger.info("Graceful shutdown completed")
 
 # Include modular routes
 app.include_router(health.router, prefix="/health", tags=["Health"])

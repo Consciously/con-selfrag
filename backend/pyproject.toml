@@ -17,12 +17,11 @@ dependencies = [
     "uvicorn>=0.24.0",
     "requests>=2.31.0",  # HTTP requests for tests and utilities
     "httpx>=0.25.0",  # Async HTTP client
+    # Database dependencies for Milestone 2
+    "asyncpg>=0.29.0",        # PostgreSQL async driver
+    "redis[hiredis]>=5.0.0",  # Redis async client with hiredis for performance
+    "qdrant-client>=1.7.0",   # Qdrant vector database client
 ]
-
-# Database dependencies (commented out for now - uncomment when needed)
-# "asyncpg>=0.29.0",        # PostgreSQL async driver
-# "sqlalchemy>=2.0.0",     # ORM for PostgreSQL
-# "qdrant-client>=1.7.0",  # Qdrant vector database client
 
 [project.optional-dependencies]
 dev = [
