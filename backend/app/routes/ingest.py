@@ -6,14 +6,15 @@ import time
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from loguru import logger
 
 from ..models.request_models import IngestRequest
 from ..models.response_models import IngestResponse
 from ..services.ingest_service import IngestService
+from ..logging_utils import get_logger
 
-router = APIRouter(prefix="/ingest", tags=["Data Management"])
+router = APIRouter(tags=["Data Management"])
 ingest_service = IngestService()
+logger = get_logger(__name__)
 
 
 @router.post(
@@ -64,9 +65,14 @@ async def ingest_content(request: IngestRequest):
     start_time = time.time()
 
     try:
-        logger.info(f"Processing content ingestion: {len(request.content)} chars")
-        if request.metadata:
-            logger.info(f"With metadata: {request.metadata}")
+        logger.info(
+            "Processing content ingestion",
+            extra={
+                "content_length": len(request.content),
+                "has_metadata": bool(request.metadata),
+                "metadata_keys": list(request.metadata.keys()) if request.metadata else []
+            }
+        )
 
         # Delegate to service layer
         result = await ingest_service.ingest_content(
@@ -74,12 +80,28 @@ async def ingest_content(request: IngestRequest):
         )
 
         processing_time = int((time.time() - start_time) * 1000)
-        logger.info(f"Content ingested successfully in {processing_time}ms")
+        logger.info(
+            "Content ingested successfully",
+            extra={
+                "processing_time_ms": processing_time,
+                "content_id": result.id,
+                "content_length": result.content_length
+            }
+        )
 
         return result
 
     except Exception as e:
-        logger.error(f"Content ingestion failed: {str(e)}")
+        processing_time = int((time.time() - start_time) * 1000)
+        logger.error(
+            "Content ingestion failed",
+            extra={
+                "processing_time_ms": processing_time,
+                "error": str(e),
+                "content_length": len(request.content)
+            },
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail={

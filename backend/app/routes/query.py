@@ -6,14 +6,15 @@ import time
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from loguru import logger
 
 from ..models.request_models import QueryRequest
 from ..models.response_models import QueryResponse
 from ..services.query_service import QueryService
+from ..logging_utils import get_logger
 
-router = APIRouter(prefix="/query", tags=["Data Management"])
+router = APIRouter(tags=["Data Management"])
 query_service = QueryService()
+logger = get_logger(__name__)
 
 
 @router.post(
@@ -68,9 +69,15 @@ async def query_content(request: QueryRequest):
     start_time = time.time()
 
     try:
-        logger.info(f"Processing query: {request.query}")
-        if request.filters:
-            logger.info(f"Applying filters: {request.filters}")
+        logger.info(
+            "Processing query",
+            extra={
+                "query": request.query,
+                "limit": request.limit,
+                "has_filters": bool(request.filters),
+                "filter_keys": list(request.filters.keys()) if request.filters else []
+            }
+        )
 
         # Delegate to service layer
         result = await query_service.query_content(
@@ -78,12 +85,28 @@ async def query_content(request: QueryRequest):
         )
 
         query_time_ms = int((time.time() - start_time) * 1000)
-        logger.info(f"Query processed successfully in {query_time_ms}ms")
+        logger.info(
+            "Query processed successfully",
+            extra={
+                "query_time_ms": query_time_ms,
+                "total_results": result.total_results,
+                "query": request.query
+            }
+        )
 
         return result
 
     except Exception as e:
-        logger.error(f"Query processing error: {str(e)}")
+        query_time_ms = int((time.time() - start_time) * 1000)
+        logger.error(
+            "Query processing failed",
+            extra={
+                "query_time_ms": query_time_ms,
+                "query": request.query,
+                "error": str(e)
+            },
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail={

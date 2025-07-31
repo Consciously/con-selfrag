@@ -2,34 +2,76 @@
 
 FastAPI backend service for the con-selfrag project with Docker-first development workflow.
 
+## Features
+
+- FastAPI-based REST API
+- Endpoints: `/ingest`, `/query`, `/health`
+- OpenAPI documentation at `/docs`
+- Modular architecture: `routes/`, `services/`, `models/`
+- Environment-based configuration system
+- Docker and Compose-ready
+
 ## Quick Start
 
-### Development Environment
+### Option 1: Docker-First Development (Recommended)
 
 1. **Start all services:**
    ```bash
    docker-compose up -d
    ```
 
-2. **Run code quality checks:**
-   ```bash
-   docker-compose --profile dev run lint
-   ```
-
-3. **Access the API:**
+2. **Access the API:**
    - API: http://localhost:8080
    - Docs: http://localhost:8080/docs
    - Health: http://localhost:8080/health
 
-### Available Services
+### Option 2: Local Development with Poetry
 
-| Service | Port | Description |
-|---------|------|-------------|
-| fastapi-gateway | 8080 | Main FastAPI application |
-| qdrant | 6333 | Vector database |
-| postgres | 5432 | PostgreSQL database |
-| redis | 6379 | Cache and session store |
-| localai | 8081 | Local AI inference |
+```bash
+cd backend
+poetry install
+poetry run uvicorn app.main:app --reload
+```
+
+Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### Option 3: Manual Development Setup
+
+```bash
+# Install dependencies
+pip install -e ".[dev]"
+
+# Run the application
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## Project Structure
+
+```
+backend/
+├── app/
+│   ├── main.py              # FastAPI app setup
+│   ├── config.py            # Environment configuration
+│   ├── routes/              # API routes
+│   ├── services/            # Business logic layer
+│   ├── models/              # Pydantic models
+│   └── database/            # Database connections (preparation)
+├── data/                    # (optional for assets)
+├── logs/                    # (optional for future logs)
+├── Dockerfile
+├── pyproject.toml
+└── README.md
+```
+
+## API Endpoints
+
+| Method | Path    | Description               |
+|--------|---------|---------------------------|
+| GET    | /health | System health check       |
+| POST   | /ingest | Document ingestion        |
+| POST   | /query  | Natural language queries  |
+
+→ Full details at `/docs`
 
 ## Development Workflow
 
@@ -193,6 +235,20 @@ pre-commit install
 - Swagger UI: http://localhost:8080/docs
 - ReDoc: http://localhost:8080/redoc
 - OpenAPI Schema: http://localhost:8080/openapi.json
+
+## Next Steps (Phase 2)
+
+- Complete document ingestion implementation
+- Add chunking, embedding, storage in Qdrant
+- Prepare CLI routing
+- Add authentication and rate limiting
+- Implement caching layer for performance
+
+## Contributing
+
+- Please use `pyproject.toml` instead of `requirements.txt`
+- Formatting via `black` or `ruff`
+- Branch name: `feature/<description>`
 
 ## Troubleshooting
 
