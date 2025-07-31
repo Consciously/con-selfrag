@@ -1,15 +1,14 @@
 """
-LocalAI client following YAGNI principles.
-Uses OpenAI-compatible API for LocalAI integration.
+LocalAI client for generating embeddings and handling model interactions.
 """
 
-import asyncio
-from typing import AsyncGenerator, List, Dict, Any
+from collections.abc import AsyncGenerator
+
 from loguru import logger
 from openai import AsyncOpenAI
 
 from .config import config
-from .models import GenerateResponse, AskResponse, ModelInfo, ErrorResponse
+from .models import AskResponse, GenerateResponse, ModelInfo
 
 
 class LocalAIClient:
@@ -20,7 +19,7 @@ class LocalAIClient:
         self.client = AsyncOpenAI(
             base_url=config.localai_base_url,
             api_key="not-needed",  # LocalAI doesn't require API key
-            timeout=config.localai_timeout
+            timeout=config.localai_timeout,
         )
         self.default_model = config.default_model
 
@@ -53,13 +52,13 @@ class LocalAIClient:
                 prompt=prompt,
                 temperature=temperature,
                 max_tokens=1000,
-                stream=False
+                stream=False,
             )
 
             return GenerateResponse(
                 response=response.choices[0].text.strip(),
                 model=model_name,
-                done=True
+                done=True,
             )
 
         except Exception as e:
@@ -90,7 +89,7 @@ class LocalAIClient:
                 prompt=prompt,
                 temperature=temperature,
                 max_tokens=1000,
-                stream=True
+                stream=True,
             )
 
             async for chunk in stream:
@@ -122,23 +121,21 @@ class LocalAIClient:
 
             response = await self.client.chat.completions.create(
                 model=model_name,
-                messages=[
-                    {"role": "user", "content": question}
-                ],
+                messages=[{"role": "user", "content": question}],
                 temperature=temperature,
-                max_tokens=1000
+                max_tokens=1000,
             )
 
             return AskResponse(
                 answer=response.choices[0].message.content.strip(),
-                model=model_name
+                model=model_name,
             )
 
         except Exception as e:
             logger.error(f"Error asking question: {str(e)}")
             raise Exception(f"Question processing failed: {str(e)}") from e
 
-    async def list_models(self) -> List[ModelInfo]:
+    async def list_models(self) -> list[ModelInfo]:
         """
         List available models.
 

@@ -1,184 +1,183 @@
 """
-Database models - prepared for PostgreSQL and Qdrant integration.
-Uncomment and implement when database functionality is needed.
+Database models - prepared for SQLAlchemy integration.
 """
 
+import uuid
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any
 
-# from sqlalchemy import Column, Integer, String, Text, DateTime, Float
-# from sqlalchemy.ext.declarative import declarative_base
-# from sqlalchemy.dialects.postgresql import UUID
-# import uuid
-
-# Base = declarative_base()
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import DeclarativeBase
 
 
-# PostgreSQL Models (uncomment when needed)
-# class ChatHistory(Base):
-#     """Chat history table for storing conversations."""
-#     __tablename__ = "chat_history"
-#
-#     id = Column(Integer, primary_key=True, index=True)
-#     session_id = Column(UUID(as_uuid=True), default=uuid.uuid4, index=True)
-#     user_id = Column(String, index=True)
-#     message = Column(Text, nullable=False)
-#     response = Column(Text, nullable=False)
-#     model = Column(String, nullable=False)
-#     temperature = Column(Float, default=0.7)
-#     created_at = Column(DateTime, default=datetime.utcnow)
-#
-#     def to_dict(self):
-#         return {
-#             "id": self.id,
-#             "session_id": str(self.session_id),
-#             "user_id": self.user_id,
-#             "message": self.message,
-#             "response": self.response,
-#             "model": self.model,
-#             "temperature": self.temperature,
-#             "created_at": self.created_at.isoformat()
-#         }
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models."""
+
+    pass
 
 
-# class UserSession(Base):
-#     """User session table for tracking user interactions."""
-#     __tablename__ = "user_sessions"
-#
-#     id = Column(Integer, primary_key=True, index=True)
-#     session_id = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True)
-#     user_id = Column(String, index=True)
-#     created_at = Column(DateTime, default=datetime.utcnow)
-#     last_activity = Column(DateTime, default=datetime.utcnow)
-#     is_active = Column(Boolean, default=True)
-#
-#     def to_dict(self):
-#         return {
-#             "id": self.id,
-#             "session_id": str(self.session_id),
-#             "user_id": self.user_id,
-#             "created_at": self.created_at.isoformat(),
-#             "last_activity": self.last_activity.isoformat(),
-#             "is_active": self.is_active
-#         }
+class ChatHistory(Base):
+    """Chat history table for storing conversations."""
+
+    __tablename__ = "chat_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(UUID(as_uuid=True), default=uuid.uuid4, index=True)
+    user_id = Column(String, index=True)
+    message = Column(Text)
+    response = Column(Text)
+    model = Column(String)
+    temperature = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "session_id": str(self.session_id) if self.session_id else None,
+            "user_id": self.user_id,
+            "message": self.message,
+            "response": self.response,
+            "model": self.model,
+            "temperature": self.temperature,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
 
-# Qdrant Models (Pydantic models for vector operations)
-# class VectorDocument:
-#     """Document model for Qdrant vector storage."""
-#
-#     def __init__(
-#         self,
-#         id: Optional[str] = None,
-#         content: str = "",
-#         metadata: Dict[str, Any] = None,
-#         embedding: Optional[List[float]] = None
-#     ):
-#         self.id = id or str(uuid.uuid4())
-#         self.content = content
-#         self.metadata = metadata or {}
-#         self.embedding = embedding
-#
-#     def to_qdrant_point(self):
-#         """Convert to Qdrant point format."""
-#         from qdrant_client.http import models
-#
-#         return models.PointStruct(
-#             id=self.id,
-#             vector=self.embedding,
-#             payload={
-#                 "content": self.content,
-#                 **self.metadata
-#             }
-#         )
-#
-#     @classmethod
-#     def from_qdrant_point(cls, point):
-#         """Create from Qdrant point."""
-#         return cls(
-#             id=str(point.id),
-#             content=point.payload.get("content", ""),
-#             metadata={k: v for k, v in point.payload.items() if k != "content"},
-#             embedding=point.vector
-#         )
+class UserSession(Base):
+    """User session table for tracking user interactions."""
+
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True)
+    user_id = Column(String, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_activity = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "session_id": str(self.session_id) if self.session_id else None,
+            "user_id": self.user_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "last_activity": (
+                self.last_activity.isoformat() if self.last_activity else None
+            ),
+            "is_active": self.is_active,
+        }
 
 
-# class SearchResult:
-#     """Search result model for vector similarity searches."""
-#
-#     def __init__(
-#         self,
-#         document: VectorDocument,
-#         score: float,
-#         rank: int
-#     ):
-#         self.document = document
-#         self.score = score
-#         self.rank = rank
-#
-#     def to_dict(self):
-#         return {
-#             "id": self.document.id,
-#             "content": self.document.content,
-#             "metadata": self.document.metadata,
-#             "score": self.score,
-#             "rank": self.rank
-#         }
+class VectorDocument:
+    """Document model for Qdrant vector storage."""
+
+    def __init__(
+        self,
+        id: str | None = None,
+        content: str = "",
+        metadata: dict[str, Any] | None = None,
+        embedding: list[float] | None = None,
+    ) -> None:
+        self.id = id or str(uuid.uuid4())
+        self.content = content
+        self.metadata = metadata or {}
+        self.embedding = embedding or []
+
+    def to_qdrant_point(self) -> dict[str, Any]:
+        """Convert to Qdrant point format."""
+        return {
+            "id": self.id,
+            "vector": self.embedding,
+            "payload": {
+                "content": self.content,
+                "metadata": self.metadata,
+            },
+        }
+
+    @classmethod
+    def from_qdrant_point(cls, point: dict[str, Any]) -> "VectorDocument":
+        """Create from Qdrant point."""
+        return cls(
+            id=point.get("id"),
+            content=point.get("payload", {}).get("content", ""),
+            metadata=point.get("payload", {}).get("metadata", {}),
+            embedding=point.get("vector"),
+        )
 
 
-# Database initialization functions (uncomment when needed)
-# async def create_tables():
-#     """Create all database tables."""
-#     from ..database.connection import postgres_manager
-#
-#     async with postgres_manager.engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.create_all)
+class SearchResult:
+    """Search result with document and relevance score."""
+
+    def __init__(self, document: VectorDocument, score: float, rank: int) -> None:
+        self.document = document
+        self.score = score
+        self.rank = rank
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "document": {
+                "id": self.document.id,
+                "content": self.document.content,
+                "metadata": self.document.metadata,
+            },
+            "score": self.score,
+            "rank": self.rank,
+        }
 
 
-# async def create_qdrant_collections():
-#     """Create Qdrant collections."""
-#     from ..database.connection import qdrant_manager
-#
-#     # Create documents collection
-#     await qdrant_manager.create_collection(
-#         collection_name="documents",
-#         vector_size=384  # Adjust based on your embedding model
-#     )
-#
-#     # Create chat embeddings collection
-#     await qdrant_manager.create_collection(
-#         collection_name="chat_embeddings",
-#         vector_size=384
-#     )
+def create_tables(engine):
+    """Create all database tables."""
+    Base.metadata.create_all(bind=engine)
 
 
-# Placeholder functions for current implementation
-def get_database_schema():
+def create_qdrant_collections():
+    """Create Qdrant collections."""
+    # Placeholder for Qdrant collection creation
+    pass
+
+
+def get_database_schema() -> dict[str, Any]:
     """Get database schema information."""
     return {
-        "postgresql_tables": [
+        "tables": [
             {
                 "name": "chat_history",
-                "description": "Stores chat conversations",
-                "ready": False,
+                "description": "Stores chat conversation history",
+                "columns": [
+                    {"name": "id", "type": "Integer", "primary_key": True},
+                    {"name": "session_id", "type": "UUID", "indexed": True},
+                    {"name": "user_id", "type": "String", "indexed": True},
+                    {"name": "message", "type": "Text"},
+                    {"name": "response", "type": "Text"},
+                    {"name": "model", "type": "String"},
+                    {"name": "temperature", "type": "Float"},
+                    {"name": "created_at", "type": "DateTime"},
+                ],
             },
             {
                 "name": "user_sessions",
                 "description": "Tracks user sessions",
-                "ready": False,
+                "columns": [
+                    {"name": "id", "type": "Integer", "primary_key": True},
+                    {
+                        "name": "session_id",
+                        "type": "UUID",
+                        "unique": True,
+                        "indexed": True,
+                    },
+                    {"name": "user_id", "type": "String", "indexed": True},
+                    {"name": "created_at", "type": "DateTime"},
+                    {"name": "last_activity", "type": "DateTime"},
+                    {"name": "is_active", "type": "Boolean"},
+                ],
             },
         ],
-        "qdrant_collections": [
+        "vector_collections": [
             {
                 "name": "documents",
-                "description": "Document embeddings for RAG",
-                "ready": False,
-            },
-            {
-                "name": "chat_embeddings",
-                "description": "Chat message embeddings",
-                "ready": False,
-            },
+                "description": "Vector store for document embeddings",
+                "dimension": 1536,  # Example dimension, adjust based on your embedding model
+            }
         ],
-        "message": "Database models prepared but not yet implemented",
     }

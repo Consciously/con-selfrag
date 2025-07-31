@@ -7,7 +7,8 @@ Each model includes comprehensive OpenAPI documentation and examples.
 
 from __future__ import annotations
 
-from typing import Optional, List, Dict, Any
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -17,22 +18,26 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(
         ...,
         description="Input prompt for text generation",
-        example="Write a Python function to calculate fibonacci numbers",
+        json_schema_extra={
+            "example": "Write a Python function to calculate fibonacci numbers"
+        },
     )
     model: str | None = Field(
-        None, description="Model name (uses default if not specified)", example="llama2"
+        default=None,
+        description="Model name (uses default if not specified)",
+        json_schema_extra={"example": "llama2"},
     )
-    temperature: float | None = Field(
-        0.7,
+    temperature: float = Field(
+        default=0.7,
         ge=0.0,
         le=2.0,
-        description="Sampling temperature (0.0 = deterministic, 2.0 = very creative)",
-        example=0.7,
+        description="Sampling temperature. 0.0 = deterministic, 2.0 = very creative",
+        json_schema_extra={"example": 0.7},
     )
-    stream: bool | None = Field(
-        False,
+    stream: bool = Field(
+        default=False,
         description="Enable streaming response for real-time text generation",
-        example=False,
+        json_schema_extra={"example": False},
     )
 
     class Config:
@@ -52,17 +57,21 @@ class AskRequest(BaseModel):
     question: str = Field(
         ...,
         description="Question to ask the AI assistant",
-        example="What are the benefits of using Docker containers?",
+        json_schema_extra={
+            "example": "What are the benefits of using Docker containers?"
+        },
     )
     model: str | None = Field(
-        None, description="Model name (uses default if not specified)", example="llama2"
+        default=None,
+        description="Model name (uses default if not specified)",
+        json_schema_extra={"example": "llama2"},
     )
-    temperature: float | None = Field(
-        0.7,
+    temperature: float = Field(
+        default=0.7,
         ge=0.0,
         le=2.0,
         description="Sampling temperature for response creativity",
-        example=0.7,
+        json_schema_extra={"example": 0.7},
     )
 
     class Config:
@@ -81,31 +90,22 @@ class IngestRequest(BaseModel):
     content: str = Field(
         ...,
         description="Content to be ingested (text, markdown, etc.)",
-        example="FastAPI is a modern, fast web framework for building APIs with Python 3.7+",
-    )
-    metadata: Dict[str, Any] | None = Field(
-        None,
-        description="Optional metadata for the content",
-        example={
-            "type": "text",
-            "language": "en",
-            "tags": ["api", "python", "documentation"],
-            "author": "user",
+        json_schema_extra={
+            "example": "FastAPI is a modern, fast web framework for building APIs with Python 3.7+"
         },
     )
-
-    class Config:
-        json_schema_extra = {
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional metadata for the content",
+        json_schema_extra={
             "example": {
-                "content": "FastAPI is a modern, fast web framework for building APIs with Python 3.7+",
-                "metadata": {
-                    "type": "text",
-                    "language": "en",
-                    "tags": ["api", "python", "documentation"],
-                    "author": "user",
-                },
+                "type": "text",
+                "language": "en",
+                "tags": ["api", "python", "documentation"],
+                "author": "user",
             }
-        }
+        },
+    )
 
 
 class QueryRequest(BaseModel):
@@ -114,26 +114,19 @@ class QueryRequest(BaseModel):
     query: str = Field(
         ...,
         description="Natural language query to search the ingested content",
-        example="What web frameworks are mentioned in the documents?",
+        json_schema_extra={
+            "example": "What web frameworks are mentioned in the documents?"
+        },
     )
-    limit: int | None = Field(
-        10,
+    limit: int = Field(
+        default=10,
         ge=1,
         le=100,
         description="Maximum number of results to return",
-        example=10,
+        json_schema_extra={"example": 10},
     )
     filters: dict[str, Any] | None = Field(
-        None,
+        default=None,
         description="Optional filters to apply to the search",
-        example={"source": "user_input", "tags": ["python"]},
+        json_schema_extra={"example": {"source": "user_input", "tags": ["python"]}},
     )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "query": "What web frameworks are mentioned in the documents?",
-                "limit": 5,
-                "filters": {"source": "user_input", "tags": ["python"]},
-            }
-        }
