@@ -1,6 +1,6 @@
 """
 Startup checks for all external services.
-Validates connectivity to Qdrant, PostgreSQL, and Redis.
+Validates connectivity to LocalAI, Qdrant, PostgreSQL, and Redis.
 """
 
 import asyncio
@@ -12,6 +12,7 @@ import asyncpg
 import httpx
 import redis.asyncio as redis
 from app.logging_utils import get_logger
+from app.localai_client import localai_client
 
 logger = get_logger(__name__)
 
@@ -36,6 +37,11 @@ class ServiceChecker:
         self.qdrant_config = {
             "host": os.getenv("QDRANT_HOST", "qdrant"),
             "port": int(os.getenv("QDRANT_PORT", "6333"))
+        }
+        
+        self.localai_config = {
+            "host": os.getenv("LOCALAI_HOST", "localai"),
+            "port": int(os.getenv("LOCALAI_PORT", "8080"))
         }
 
     async def check_postgres(self) -> Dict[str, Any]:
@@ -120,36 +126,38 @@ class ServiceChecker:
                 "port": self.redis_config["port"]
             })
             
-            client = redis.Redis(
+            # Connect to Redis
+            redis_client = redis.Redis(
                 host=self.redis_config["host"],
                 port=self.redis_config["port"],
                 decode_responses=True
             )
             
             # Test basic connectivity
-            pong = await client.ping()
-            assert pong is True
+            await redis_client.ping()
             
             # Test basic operations
             test_key = "startup_check_test"
-            await client.set(test_key, "test_value", ex=10)
-            test_value = await client.get(test_key)
-            assert test_value == "test_value"
-            await client.delete(test_key)
+            await redis_client.set(test_key, "test_value", ex=60)  # Expire in 60 seconds
+            value = await redis_client.get(test_key)
+            assert value == "test_value"
+            
+            # Clean up
+            await redis_client.delete(test_key)
             
             # Get Redis info
-            info = await client.info()
+            info = await redis_client.info()
             redis_version = info.get("redis_version", "unknown")
             
-            await client.close()
+            await redis_client.close()
             
             logger.info("Redis connection successful", extra={
-                "redis_version": redis_version
+                "version": redis_version
             })
             
             return {
                 "status": "healthy",
-                "redis_version": redis_version,
+                "version": redis_version,
                 "message": "Redis connection successful"
             }
             
@@ -164,34 +172,42 @@ class ServiceChecker:
     async def check_qdrant(self) -> Dict[str, Any]:
         """Check Qdrant connectivity and basic operations."""
         try:
-            qdrant_url = f"http://{self.qdrant_config['host']}:{self.qdrant_config['port']}"
-            
             logger.info("Checking Qdrant connection...", extra={
-                "url": qdrant_url
+                "host": self.qdrant_config["host"],
+                "port": self.qdrant_config["port"]
             })
             
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Check readiness
-                resp = await client.get(f"{qdrant_url}/readyz")
-                assert resp.status_code == 200
+            # Use httpx to check Qdrant health endpoint
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"http://{self.qdrant_config['host']}:{self.qdrant_config['port']}/readyz",
+                    timeout=10.0
+                )
+                response.raise_for_status()
                 
                 # Get cluster info
-                resp = await client.get(f"{qdrant_url}/cluster")
-                cluster_info = resp.json() if resp.status_code == 200 else {}
+                cluster_response = await client.get(
+                    f"http://{self.qdrant_config['host']}:{self.qdrant_config['port']}/cluster",
+                    timeout=10.0
+                )
+                cluster_info = cluster_response.json()
                 
                 # Get collections
-                resp = await client.get(f"{qdrant_url}/collections")
-                collections_info = resp.json() if resp.status_code == 200 else {}
-                
+                collections_response = await client.get(
+                    f"http://{self.qdrant_config['host']}:{self.qdrant_config['port']}/collections",
+                    timeout=10.0
+                )
+                collections_info = collections_response.json()
+                collections_count = len(collections_info.get("result", {}).get("collections", []))
+            
             logger.info("Qdrant connection successful", extra={
-                "cluster_info": cluster_info,
-                "collections_count": len(collections_info.get("result", {}).get("collections", []))
+                "collections_count": collections_count
             })
             
             return {
                 "status": "healthy",
+                "collections_count": collections_count,
                 "cluster_info": cluster_info,
-                "collections": collections_info.get("result", {}).get("collections", []),
                 "message": "Qdrant connection successful"
             }
             
@@ -203,23 +219,86 @@ class ServiceChecker:
                 "message": "Qdrant connection failed"
             }
 
+    async def check_localai(self) -> Dict[str, Any]:
+        """Check LocalAI connectivity and basic operations."""
+        try:
+            logger.info("Checking LocalAI connection...", extra={
+                "host": self.localai_config["host"],
+                "port": self.localai_config["port"]
+            })
+            
+            # Use the LocalAI client for health check
+            is_healthy = await localai_client.health_check()
+            
+            if not is_healthy:
+                return {
+                    "status": "unhealthy",
+                    "error": "Health check failed",
+                    "message": "LocalAI health check failed"
+                }
+            
+            # Try to list models to verify API functionality
+            try:
+                models = await localai_client.list_models()
+                model_names = [model.name for model in models]
+                
+                logger.info("LocalAI connection successful", extra={
+                    "models_count": len(models),
+                    "models": model_names
+                })
+                
+                return {
+                    "status": "healthy",
+                    "models_count": len(models),
+                    "available_models": model_names,
+                    "message": "LocalAI connection successful"
+                }
+                
+            except Exception as model_error:
+                logger.warning("LocalAI model listing failed", extra={"error": str(model_error)})
+                return {
+                    "status": "healthy",
+                    "models_count": 0,
+                    "available_models": [],
+                    "warning": f"Model listing failed: {str(model_error)}",
+                    "message": "LocalAI connection successful (limited functionality)"
+                }
+            
+        except Exception as e:
+            logger.error("LocalAI connection failed", extra={"error": str(e)}, exc_info=True)
+            return {
+                "status": "unhealthy",
+                "error": str(e),
+                "message": "LocalAI connection failed"
+            }
+
     async def check_all_services(self) -> Dict[str, Any]:
         """Run all service checks and return comprehensive status."""
-        logger.info("Starting comprehensive service checks...")
+        logger.info("Running comprehensive service checks...")
         
         # Run all checks concurrently
-        postgres_task = asyncio.create_task(self.check_postgres())
-        redis_task = asyncio.create_task(self.check_redis())
-        qdrant_task = asyncio.create_task(self.check_qdrant())
+        postgres_result, redis_result, qdrant_result, localai_result = await asyncio.gather(
+            self.check_postgres(),
+            self.check_redis(),
+            self.check_qdrant(),
+            self.check_localai(),
+            return_exceptions=True
+        )
         
-        postgres_result = await postgres_task
-        redis_result = await redis_task
-        qdrant_result = await qdrant_task
+        # Handle any exceptions from concurrent execution
+        if isinstance(postgres_result, Exception):
+            postgres_result = {"status": "unhealthy", "error": str(postgres_result), "message": "Check failed"}
+        if isinstance(redis_result, Exception):
+            redis_result = {"status": "unhealthy", "error": str(redis_result), "message": "Check failed"}
+        if isinstance(qdrant_result, Exception):
+            qdrant_result = {"status": "unhealthy", "error": str(qdrant_result), "message": "Check failed"}
+        if isinstance(localai_result, Exception):
+            localai_result = {"status": "unhealthy", "error": str(localai_result), "message": "Check failed"}
         
         # Determine overall health
         all_healthy = all(
             result["status"] == "healthy" 
-            for result in [postgres_result, redis_result, qdrant_result]
+            for result in [postgres_result, redis_result, qdrant_result, localai_result]
         )
         
         results = {
@@ -227,7 +306,8 @@ class ServiceChecker:
             "services": {
                 "postgres": postgres_result,
                 "redis": redis_result,
-                "qdrant": qdrant_result
+                "qdrant": qdrant_result,
+                "localai": localai_result
             },
             "timestamp": asyncio.get_event_loop().time()
         }
@@ -236,7 +316,8 @@ class ServiceChecker:
             "overall_status": results["overall_status"],
             "postgres_status": postgres_result["status"],
             "redis_status": redis_result["status"],
-            "qdrant_status": qdrant_result["status"]
+            "qdrant_status": qdrant_result["status"],
+            "localai_status": localai_result["status"]
         })
         
         return results

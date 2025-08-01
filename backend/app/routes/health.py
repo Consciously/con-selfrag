@@ -32,7 +32,8 @@ async def readiness():
             logger.debug("All services healthy", extra={
                 "postgres": results["services"]["postgres"]["status"],
                 "redis": results["services"]["redis"]["status"],
-                "qdrant": results["services"]["qdrant"]["status"]
+                "qdrant": results["services"]["qdrant"]["status"],
+                "localai": results["services"]["localai"]["status"]
             })
             return {
                 "status": "ready",
@@ -43,7 +44,8 @@ async def readiness():
             logger.warning("Some services unhealthy", extra={
                 "postgres": results["services"]["postgres"]["status"],
                 "redis": results["services"]["redis"]["status"],
-                "qdrant": results["services"]["qdrant"]["status"]
+                "qdrant": results["services"]["qdrant"]["status"],
+                "localai": results["services"]["localai"]["status"]
             })
             raise HTTPException(
                 status_code=503,
@@ -80,7 +82,8 @@ async def health():
             "services": {
                 "postgres": results["services"]["postgres"]["status"],
                 "redis": results["services"]["redis"]["status"],
-                "qdrant": results["services"]["qdrant"]["status"]
+                "qdrant": results["services"]["qdrant"]["status"],
+                "localai": results["services"]["localai"]["status"]
             },
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
