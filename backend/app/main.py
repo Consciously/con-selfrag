@@ -10,6 +10,7 @@ from .config import config
 from .routes import debug, health, ingest, llm, query
 from .logging_utils import get_logger, log_request
 from .startup_check import startup_checks
+from .models import ModelInfo
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -178,8 +179,41 @@ async def root():
             "llm": "/llm",
             "query": "/query",
             "docs": "/docs",
+            "models": "/models",
         },
     }
+
+
+@app.get(
+    "/models",
+    response_model=list[ModelInfo],
+    summary="List available LLM models",
+    description="""
+    **List all available LLM models from LocalAI.**
+    
+    This is a convenience endpoint that provides the same functionality as `/llm/models`
+    for easier access and transparency. Returns information about all models available
+    in the LocalAI instance.
+    
+    **Use Cases:**
+    - Quick model discovery without navigating to LLM-specific endpoints
+    - Integration testing and verification
+    - System capability assessment
+    - Model availability checking
+    
+    **Note:** This endpoint delegates to `/llm/models` for consistency.
+    """,
+    tags=["Models"]
+)
+async def list_available_models():
+    """List all available LLM models - delegates to LLM router for consistency."""
+    logger.info("Root models endpoint accessed")
+    
+    # Import here to avoid circular imports
+    from .routes.llm import list_models
+    
+    # Delegate to the LLM router's models endpoint
+    return await list_models()
 
 
 if __name__ == "__main__":
