@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
-from .routes import health, ingest, query
+from .routes import health, ingest, llm, query
 from .logging_utils import get_logger, log_request
 from .startup_check import startup_checks
 
@@ -20,12 +20,21 @@ app = FastAPI(
     description="""
     **Selfrag LLM API - Modular Backend Interface**
 
-    A clean, extensible FastAPI backend for AI-powered applications.
+    A clean, extensible FastAPI backend for AI-powered applications with integrated LLM capabilities.
 
     ## Features
     - **Health Monitoring**: Service health and readiness checks
     - **Content Ingestion**: Add content with metadata for processing
     - **Natural Language Search**: Query content using semantic search
+    - **LLM Integration**: Text generation, question answering, and model management
+    - **Streaming Support**: Real-time text generation with streaming responses
+
+    ## LLM Capabilities
+    - **Text Generation**: `/llm/generate` - Generate text using configured models
+    - **Streaming Generation**: `/llm/generate/stream` - Real-time text generation
+    - **Question Answering**: `/llm/ask` - Conversational Q&A interface
+    - **Model Management**: `/llm/models` - List and manage available models
+    - **Health Monitoring**: `/llm/health` - LLM service status checks
 
     ## Getting Started
     1. Start the service: `uvicorn app.main:app --reload`
@@ -36,7 +45,7 @@ app = FastAPI(
     - **Routes**: HTTP endpoint handlers
     - **Services**: Business logic layer
     - **Models**: Pydantic models for validation
-    - **Clients**: External service integrations
+    - **Clients**: External service integrations (LocalAI, Qdrant, PostgreSQL, Redis)
     """,
     version="1.0.0",
     docs_url="/docs",
@@ -108,13 +117,15 @@ async def startup_event():
             logger.info("✅ All services healthy - API ready to serve requests", extra={
                 "postgres": results["services"]["postgres"]["status"],
                 "redis": results["services"]["redis"]["status"],
-                "qdrant": results["services"]["qdrant"]["status"]
+                "qdrant": results["services"]["qdrant"]["status"],
+                "localai": results["services"]["localai"]["status"]
             })
         else:
             logger.warning("⚠️ Some services unhealthy - API may have limited functionality", extra={
                 "postgres": results["services"]["postgres"]["status"],
                 "redis": results["services"]["redis"]["status"],
-                "qdrant": results["services"]["qdrant"]["status"]
+                "qdrant": results["services"]["qdrant"]["status"],
+                "localai": results["services"]["localai"]["status"]
             })
             
             # Log specific service issues
@@ -140,6 +151,7 @@ async def shutdown_event():
 # Include modular routes
 app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(ingest.router, prefix="/ingest", tags=["Ingestion"])
+app.include_router(llm.router, prefix="/llm", tags=["LLM"])
 app.include_router(query.router, prefix="/query", tags=["Query"])
 
 
@@ -154,6 +166,7 @@ async def root():
         "endpoints": {
             "health": "/health",
             "ingest": "/ingest",
+            "llm": "/llm",
             "query": "/query",
             "docs": "/docs",
         },
