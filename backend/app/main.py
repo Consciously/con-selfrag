@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
-from .routes import health, ingest, llm, query
+from .routes import debug, health, ingest, llm, query
 from .logging_utils import get_logger, log_request
 from .startup_check import startup_checks
 
@@ -28,6 +28,7 @@ app = FastAPI(
     - **Natural Language Search**: Query content using semantic search
     - **LLM Integration**: Text generation, question answering, and model management
     - **Streaming Support**: Real-time text generation with streaming responses
+    - **Debug Endpoints**: Direct LocalAI testing and inspection tools
 
     ## LLM Capabilities
     - **Text Generation**: `/llm/generate` - Generate text using configured models
@@ -35,6 +36,12 @@ app = FastAPI(
     - **Question Answering**: `/llm/ask` - Conversational Q&A interface
     - **Model Management**: `/llm/models` - List and manage available models
     - **Health Monitoring**: `/llm/health` - LLM service status checks
+
+    ## Debug Endpoints (Development)
+    - **Direct Ask**: `/debug/ask` - Test LocalAI question answering directly
+    - **Direct Embed**: `/debug/embed` - Test embedding generation directly
+    - **Direct Generate**: `/debug/generate` - Test text generation directly
+    - **Service Status**: `/debug/status` - Inspect LocalAI configuration and status
 
     ## Getting Started
     1. Start the service: `uvicorn app.main:app --reload`
@@ -149,6 +156,7 @@ async def shutdown_event():
     logger.info("Graceful shutdown completed")
 
 # Include modular routes
+app.include_router(debug.router, prefix="/debug", tags=["Debug"])
 app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(ingest.router, prefix="/ingest", tags=["Ingestion"])
 app.include_router(llm.router, prefix="/llm", tags=["LLM"])
@@ -164,6 +172,7 @@ async def root():
         "version": "1.0.0",
         "description": "Modular FastAPI backend for AI applications",
         "endpoints": {
+            "debug": "/debug",
             "health": "/health",
             "ingest": "/ingest",
             "llm": "/llm",
