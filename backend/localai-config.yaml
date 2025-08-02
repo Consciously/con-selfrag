@@ -1,9 +1,0 @@
-backend_configs:
-  - models_path: /models
-    threads: 4
-    context_size: 2048
-    debug: false
-    disable_download: true
-    download_timeout: 600
-    preload_models:
-      - llama-3.2-1b-instruct
