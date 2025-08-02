@@ -19,7 +19,6 @@ except ImportError:
     QDRANT_AVAILABLE = False
 
 from ..database.connection import get_qdrant_client
-from ..models import DocumentChunk
 from ..logging_utils import get_logger
 from ..config import config
 
@@ -127,14 +126,14 @@ class VectorService:
     
     async def store_chunks(
         self,
-        chunks: List[DocumentChunk],
+        chunks: List[dict],  # TODO: Use DocumentChunk when model is defined
         embeddings: List[List[float]]
     ) -> bool:
         """
         Store document chunks with their embeddings in Qdrant.
         
         Args:
-            chunks: List of DocumentChunk objects
+            chunks: List of document chunk dictionaries  # TODO: Use DocumentChunk objects
             embeddings: List of embedding vectors corresponding to chunks
             
         Returns:

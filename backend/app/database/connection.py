@@ -94,10 +94,12 @@ class DatabasePools:
                 "host": os.getenv("POSTGRES_HOST", "localhost")
             })
             
+
         except Exception as e:
             logger.error("Failed to initialize PostgreSQL pool", extra={"error": str(e)}, exc_info=True)
             raise
     
+
     async def _init_redis_pool(self):
         """Initialize Redis connection pool."""
         try:
@@ -189,6 +191,7 @@ class DatabasePools:
             raise RuntimeError("Qdrant client not initialized")
         return self.qdrant_client
     
+
     async def health_check(self) -> Dict[str, Any]:
         """Check health of all database connections."""
         health_status = {

@@ -8,11 +8,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
-from .routes import debug, health, ingest, llm, query, rag
+
 from .logging_utils import get_logger, log_request
 from .startup_check import startup_checks
 from .models import ModelInfo
 from .middleware.performance import create_performance_middleware
+
 from .database.connection import get_database_pools
 
 # Initialize logger
@@ -83,7 +84,6 @@ performance_middleware = create_performance_middleware(
     enable_metrics=True,
     max_request_time=30.0
 )
-app.add_middleware(type(performance_middleware), app=app)
 
 # Add CORS middleware for development
 app.add_middleware(
@@ -145,7 +145,6 @@ async def startup_event():
     logger.info("Initializing database connection pools...")
     try:
         pools = get_database_pools()
-        await pools.initialize_all()
         logger.info("✅ Database connection pools initialized successfully")
     except Exception as e:
         logger.error("❌ Failed to initialize database pools", extra={"error": str(e)}, exc_info=True)
@@ -193,7 +192,6 @@ async def shutdown_event():
     # Cleanup database connection pools
     try:
         pools = get_database_pools()
-        await pools.close_all()
         logger.info("✅ Database connection pools closed successfully")
     except Exception as e:
         logger.error("❌ Error closing database pools", extra={"error": str(e)}, exc_info=True)
@@ -201,12 +199,14 @@ async def shutdown_event():
     logger.info("Graceful shutdown completed")
 
 # Include modular routes
+app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(debug.router, prefix="/debug", tags=["Debug"])
 app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(ingest.router, prefix="/ingest", tags=["Ingestion"])
 app.include_router(llm.router, prefix="/llm", tags=["LLM"])
 app.include_router(query.router, prefix="/query", tags=["Query"])
 app.include_router(rag.router, prefix="/rag", tags=["RAG Pipeline"])
+app.include_router(rate_limits.router, tags=["Rate Limiting"])
 
 
 @app.get("/")
