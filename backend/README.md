@@ -1,31 +1,67 @@
 # con-selfrag Backend
 
-FastAPI backend service for the con-selfrag project with Docker-first development workflow.
+FastAPI backend service for the con-selfrag project with Docker-first development workflow and comprehensive CLI interface.
 
 ## Features
 
 - FastAPI-based REST API
-- Endpoints: `/ingest`, `/query`, `/health`
+- Endpoints: `/ingest`, `/query`, `/health`, `/rag`
 - OpenAPI documentation at `/docs`
 - Modular architecture: `routes/`, `services/`, `models/`
 - Environment-based configuration system
 - Docker and Compose-ready
+- **Complete CLI interface for command-line operations**
+- RAG pipeline with vector embeddings and semantic search
 
 ## Quick Start
 
 ### Option 1: Docker-First Development (Recommended)
 
 1. **Start all services:**
+
    ```bash
    docker-compose up -d
    ```
 
 2. **Access the API:**
+
    - API: http://localhost:8080
    - Docs: http://localhost:8080/docs
    - Health: http://localhost:8080/health
 
-### Option 2: Local Development with Poetry
+3. **Use the CLI:**
+   ```bash
+   cd backend
+   ./setup_cli.sh  # One-time setup
+   ./selfrag health
+   ./selfrag query "machine learning"
+   ```
+
+### Option 2: CLI-First Usage
+
+The CLI can be used independently for all operations:
+
+```bash
+cd backend
+
+# Setup CLI
+./setup_cli.sh
+
+# Check system health
+./selfrag health
+
+# Ingest documents
+./selfrag ingest README.md --title "Project Documentation"
+./selfrag ingest *.py --tags "code,python"
+
+# Query knowledge base
+./selfrag query "how to setup the project"
+
+# Interactive mode
+./selfrag chat
+```
+
+### Option 3: Local Development with Poetry
 
 ```bash
 cd backend
@@ -45,6 +81,57 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+## CLI Interface
+
+Selfrag includes a comprehensive command-line interface for all operations:
+
+### Setup
+
+```bash
+# One-time setup
+cd backend
+./setup_cli.sh
+
+# Or use directly
+python3 selfrag_cli.py --help
+```
+
+### Commands
+
+```bash
+# Health monitoring
+./selfrag health
+
+# Document ingestion
+./selfrag ingest document.txt --title "My Document" --tags "important"
+./selfrag ingest *.md --type documentation
+
+# Knowledge base queries
+./selfrag query "machine learning algorithms"
+./selfrag query "API setup" --limit 5 --threshold 0.7
+
+# Interactive chat mode
+./selfrag chat
+
+# System statistics
+./selfrag stats
+```
+
+### Advanced Usage
+
+```bash
+# Batch processing
+find docs/ -name "*.md" | head -10 | xargs -I {} ./selfrag ingest {} --type docs
+
+# JSON output for scripting
+./selfrag query "docker" --format json | jq '.[0].content'
+
+# Custom API endpoint
+./selfrag --api-url http://remote:8080 health
+```
+
+See `app/cli/README.md` for comprehensive CLI documentation.
+
 ## Project Structure
 
 ```
@@ -55,9 +142,12 @@ backend/
 │   ├── routes/              # API routes
 │   ├── services/            # Business logic layer
 │   ├── models/              # Pydantic models
+│   ├── cli/                 # Command-line interface
 │   └── database/            # Database connections (preparation)
 ├── data/                    # (optional for assets)
 ├── logs/                    # (optional for future logs)
+├── selfrag_cli.py          # Standalone CLI script
+├── setup_cli.sh            # CLI setup script
 ├── Dockerfile
 ├── pyproject.toml
 └── README.md
@@ -65,11 +155,12 @@ backend/
 
 ## API Endpoints
 
-| Method | Path    | Description               |
-|--------|---------|---------------------------|
-| GET    | /health | System health check       |
-| POST   | /ingest | Document ingestion        |
-| POST   | /query  | Natural language queries  |
+| Method | Path    | Description              |
+| ------ | ------- | ------------------------ |
+| GET    | /health | System health check      |
+| POST   | /ingest | Document ingestion       |
+| POST   | /query  | Natural language queries |
+| GET    | /rag    | RAG pipeline operations  |
 
 → Full details at `/docs`
 
@@ -274,3 +365,4 @@ docker-compose logs -f fastapi-gateway
 # Full reset
 docker-compose down -v
 docker-compose up --build
+```

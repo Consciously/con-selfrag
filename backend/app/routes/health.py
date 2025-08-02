@@ -5,6 +5,8 @@ Health check endpoints for monitoring service status.
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
+from ..services.embedding_service import EmbeddingService
+from ..services.vector_service import VectorService
 from ..logging_utils import get_logger
 from ..startup_check import service_checker
 
@@ -300,6 +302,101 @@ async def llm_health_check():
         )
         health_status["status"] = "error"
         health_status["message"] = f"Health check failed: {str(e)}"
+        raise HTTPException(
+            status_code=503,
+            detail=health_status
+        ) from e
+
+
+@router.get("/rag")
+async def rag_health():
+    """Check RAG pipeline health including embeddings and vector database."""
+    logger.debug("RAG health check accessed")
+    
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "components": {
+            "embedding_service": {"status": "unknown"},
+            "vector_service": {"status": "unknown"},
+            "pipeline": {"status": "unknown"}
+        }
+    }
+    
+    try:
+        # Test embedding service
+        embedding_service = EmbeddingService()
+        test_embedding = await embedding_service.generate_embedding("test query")
+        
+        if test_embedding and len(test_embedding) > 0:
+            health_status["components"]["embedding_service"] = {
+                "status": "healthy",
+                "embedding_dimension": len(test_embedding),
+                "model_name": embedding_service.model_name
+            }
+        else:
+            health_status["components"]["embedding_service"] = {
+                "status": "unhealthy",
+                "message": "Empty embedding generated"
+            }
+            
+        # Test vector service
+        vector_service = VectorService()
+        vector_stats = await vector_service.get_collection_stats()
+        
+        if "error" not in vector_stats:
+            health_status["components"]["vector_service"] = {
+                "status": "healthy",
+                **vector_stats
+            }
+        else:
+            health_status["components"]["vector_service"] = {
+                "status": "unhealthy",
+                "message": vector_stats.get("error", "Unknown error")
+            }
+            
+        # Overall pipeline status
+        embedding_healthy = health_status["components"]["embedding_service"]["status"] == "healthy"
+        vector_healthy = health_status["components"]["vector_service"]["status"] == "healthy"
+        
+        if embedding_healthy and vector_healthy:
+            health_status["components"]["pipeline"]["status"] = "healthy"
+            health_status["status"] = "healthy"
+            health_status["message"] = "RAG pipeline is fully operational"
+        elif embedding_healthy:
+            health_status["components"]["pipeline"]["status"] = "degraded"
+            health_status["status"] = "degraded"
+            health_status["message"] = "RAG pipeline partially operational (embeddings only)"
+        else:
+            health_status["components"]["pipeline"]["status"] = "unhealthy"
+            health_status["status"] = "unhealthy"
+            health_status["message"] = "RAG pipeline not operational"
+            
+        logger.info(
+            "RAG health check completed",
+            extra={
+                "status": health_status["status"],
+                "embedding_status": health_status["components"]["embedding_service"]["status"],
+                "vector_status": health_status["components"]["vector_service"]["status"]
+            }
+        )
+        
+        # Return appropriate HTTP status
+        if health_status["status"] == "healthy":
+            return health_status
+        elif health_status["status"] == "degraded":
+            raise HTTPException(status_code=206, detail=health_status)  # Partial Content
+        else:
+            raise HTTPException(status_code=503, detail=health_status)
+            
+    except Exception as e:
+        logger.error(
+            "RAG health check failed",
+            extra={"error": str(e)},
+            exc_info=True
+        )
+        health_status["status"] = "error"
+        health_status["message"] = f"RAG health check failed: {str(e)}"
         raise HTTPException(
             status_code=503,
             detail=health_status

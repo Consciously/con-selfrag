@@ -1,10 +1,10 @@
 # CON-LLM-CONTAINER
 
-A comprehensive containerized LLM (Large Language Model) application with vector database, caching, and persistent storage capabilities.
+A comprehensive containerized LLM (Large Language Model) application with vector database, caching, persistent storage, and **complete CLI interface** for command-line operations.
 
 ## 🚀 Phase 0: Infrastructure & Compose
 
-This phase establishes the foundational infrastructure with container orchestration, networking, persistent storage, and CI/CD pipelines.
+This phase establishes the foundational infrastructure with container orchestration, networking, persistent storage, CI/CD pipelines, and a powerful CLI for all operations.
 
 ### 📋 Architecture Overview
 
@@ -60,7 +60,27 @@ docker-compose ps
 docker-compose logs -f
 ```
 
-#### 3. Verify Installation
+#### 3. Use the CLI Interface
+
+```bash
+# Setup CLI (one-time)
+cd backend
+./setup_cli.sh
+
+# Check system health
+./selfrag health
+
+# Ingest documents
+./selfrag ingest README.md --title "Project Documentation"
+
+# Query your knowledge
+./selfrag query "how to setup the project"
+
+# Interactive mode
+./selfrag chat
+```
+
+#### 4. Verify Installation
 
 ```bash
 # Run health checks
@@ -70,24 +90,28 @@ docker-compose logs -f
 curl http://localhost:8080/health
 curl http://localhost:6333/health
 curl http://localhost:9000/minio/health/live
+
+# CLI health check
+cd backend && ./selfrag health
 ```
 
 ### 🔧 Service Configuration
 
 #### Service URLs and Ports
 
-| Service | URL | Port | Description |
-|---------|-----|------|-------------|
-| **FastAPI Gateway** | http://localhost:8080 | 8080 | Main API gateway |
-| **LocalAI** | http://localhost:8081 | 8081 | LLM inference service |
-| **Qdrant** | http://localhost:6333 | 6333 | Vector database |
-| **PostgreSQL** | localhost:5432 | 5432 | Relational database |
-| **Redis** | localhost:6379 | 6379 | Caching layer |
-| **MinIO** | http://localhost:9000 | 9000/9001 | Object storage |
+| Service             | URL                   | Port      | Description           |
+| ------------------- | --------------------- | --------- | --------------------- |
+| **FastAPI Gateway** | http://localhost:8080 | 8080      | Main API gateway      |
+| **LocalAI**         | http://localhost:8081 | 8081      | LLM inference service |
+| **Qdrant**          | http://localhost:6333 | 6333      | Vector database       |
+| **PostgreSQL**      | localhost:5432        | 5432      | Relational database   |
+| **Redis**           | localhost:6379        | 6379      | Caching layer         |
+| **MinIO**           | http://localhost:9000 | 9000/9001 | Object storage        |
 
 #### Internal Network Communication
 
 Services communicate via Docker's internal DNS:
+
 - **FastAPI Gateway** → `http://localai:8080`
 - **FastAPI Gateway** → `http://qdrant:6333`
 - **FastAPI Gateway** → `http://postgres:5432`
@@ -115,13 +139,13 @@ curl http://localhost:9000/minio/health/live  # MinIO
 
 #### Docker Volumes
 
-| Volume | Purpose | Backup |
-|--------|---------|--------|
-| `localai-data` | LocalAI models and cache | ✅ |
-| `qdrant-data` | Vector database storage | ✅ |
-| `postgres-data` | Relational database | ✅ |
-| `redis-data` | Cache persistence | ✅ |
-| `minio-data` | Object storage | ✅ |
+| Volume          | Purpose                  | Backup |
+| --------------- | ------------------------ | ------ |
+| `localai-data`  | LocalAI models and cache | ✅     |
+| `qdrant-data`   | Vector database storage  | ✅     |
+| `postgres-data` | Relational database      | ✅     |
+| `redis-data`    | Cache persistence        | ✅     |
+| `minio-data`    | Object storage           | ✅     |
 
 #### Backup and Restore
 
@@ -170,6 +194,7 @@ cd backend && python -m pytest tests/
 #### Environment Variables
 
 Key security considerations:
+
 - Never commit `.env` files
 - Use strong passwords in production
 - Rotate secrets regularly
@@ -187,6 +212,7 @@ Key security considerations:
 #### Common Issues
 
 **Services won't start:**
+
 ```bash
 # Check Docker and Docker Compose versions
 docker --version
@@ -201,6 +227,7 @@ docker system prune -f
 ```
 
 **GPU not detected:**
+
 ```bash
 # Check NVIDIA Docker runtime
 docker run --rm --gpus all nvidia/cuda:12.0-base-ubuntu20.04 nvidia-smi
@@ -210,6 +237,7 @@ docker-compose exec localai nvidia-smi
 ```
 
 **Port conflicts:**
+
 ```bash
 # Check port usage
 netstat -tulpn | grep :8080

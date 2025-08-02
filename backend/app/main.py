@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
-from .routes import debug, health, ingest, llm, query
+from .routes import debug, health, ingest, llm, query, rag
 from .logging_utils import get_logger, log_request
 from .startup_check import startup_checks
 from .models import ModelInfo
@@ -162,6 +162,7 @@ app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(ingest.router, prefix="/ingest", tags=["Ingestion"])
 app.include_router(llm.router, prefix="/llm", tags=["LLM"])
 app.include_router(query.router, prefix="/query", tags=["Query"])
+app.include_router(rag.router, prefix="/rag", tags=["RAG Pipeline"])
 
 
 @app.get("/")

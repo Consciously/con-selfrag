@@ -1,36 +1,30 @@
 # Multi-stage Dockerfile for development and production
-FROM python:3.12-alpine AS dev
+FROM python:3.12-slim AS dev
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies and development tools
-RUN apk update --no-cache && \
-    apk add --no-cache \
+# Install system dependencies and development tools for ML packages
+RUN apt-get update && apt-get install -y \
     curl \
     bash \
     gcc \
-    musl-dev \
-    linux-headers \
-    || \
-    (apk add --no-cache --repository http://dl-3.alpinelinux.org/alpine/v3.22/main \
-    curl \
-    bash \
-    gcc \
-    musl-dev \
-    linux-headers) || \
-    (apk add --no-cache --repository http://dl-4.alpinelinux.org/alpine/v3.22/main \
-    curl \
-    bash \
-    gcc \
-    musl-dev \
-    linux-headers)
+    g++ \
+    make \
+    python3-dev \
+    build-essential \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files
 COPY pyproject.toml README.md ./
 
 # Install all dependencies including dev tools
-RUN pip install --no-cache-dir -e ".[dev]" && \
+# Install in specific order to handle dependencies better
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir numpy && \
+    pip install --no-cache-dir -e ".[dev]" && \
     pip install --no-cache-dir uv
 
 # Copy application code
@@ -40,23 +34,17 @@ COPY test_*.py ./
 # Development stage complete - includes all dev tools
 
 # Runtime stage - slim production image
-FROM python:3.12-alpine AS runtime
+FROM python:3.12-slim AS runtime
 
 # Create non-root user for security
-RUN addgroup -g 1000 llmuser && \
-    adduser -D -s /bin/sh -u 1000 -G llmuser llmuser
+RUN groupadd -g 1000 llmuser && \
+    useradd -r -u 1000 -g llmuser llmuser
 
 # Install minimal runtime dependencies
-RUN apk update --no-cache && \
-    apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     curl \
-    bash || \
-    (apk add --no-cache --repository http://dl-3.alpinelinux.org/alpine/v3.22/main \
-    curl \
-    bash) || \
-    (apk add --no-cache --repository http://dl-4.alpinelinux.org/alpine/v3.22/main \
-    curl \
-    bash)
+    bash \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

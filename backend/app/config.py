@@ -29,11 +29,19 @@ class Config(BaseModel):
     # Logging
     log_level: str = Field(default="INFO", description="Logging level")
 
-    # Database placeholders (for future use)
-    # Uncomment when database integration is needed
-    # postgres_url: str = Field(default="", description="PostgreSQL connection URL")
-    # qdrant_host: str = Field(default="localhost", description="Qdrant host")
-    # qdrant_port: int = Field(default=6333, description="Qdrant port")
+    # Database settings (now active for RAG pipeline)
+    postgres_url: str = Field(default="", description="PostgreSQL connection URL")
+    qdrant_host: str = Field(default="localhost", description="Qdrant host")
+    qdrant_port: int = Field(default=6333, description="Qdrant port")
+    redis_host: str = Field(default="localhost", description="Redis host")
+    redis_port: int = Field(default=6379, description="Redis port")
+    
+    # RAG pipeline settings
+    embedding_model: str = Field(default="all-MiniLM-L6-v2", description="Embedding model name")
+    chunk_size: int = Field(default=1000, description="Document chunk size in characters")
+    chunk_overlap: int = Field(default=200, description="Overlap between chunks")
+    search_limit: int = Field(default=10, description="Default number of search results")
+    search_threshold: float = Field(default=0.5, description="Minimum similarity score for search results")
 
     @property
     def localai_base_url(self) -> str:
@@ -50,8 +58,20 @@ def load_config() -> Config:
         localai_port=int(os.getenv("LOCALAI_PORT", "8080")),
         localai_timeout=float(os.getenv("LOCALAI_TIMEOUT", "30.0")),
         default_model=os.getenv("DEFAULT_MODEL", "llama-3.2-1b-instruct"),
-        cors_origins=os.getenv("CORS_ORIGINS", "*").split(","),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
+        # Database settings
+        postgres_url=os.getenv("POSTGRES_URL", ""),
+        qdrant_host=os.getenv("QDRANT_HOST", "localhost"),
+        qdrant_port=int(os.getenv("QDRANT_PORT", "6333")),
+        redis_host=os.getenv("REDIS_HOST", "localhost"),
+        redis_port=int(os.getenv("REDIS_PORT", "6379")),
+        # RAG settings
+        embedding_model=os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
+        chunk_size=int(os.getenv("CHUNK_SIZE", "1000")),
+        chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "200")),
+        search_limit=int(os.getenv("SEARCH_LIMIT", "10")),
+        search_threshold=float(os.getenv("SEARCH_THRESHOLD", "0.5")),
+        cors_origins=os.getenv("CORS_ORIGINS", "*").split(","),
     )
 
 

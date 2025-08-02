@@ -1,0 +1,4 @@
+#!/bin/bash
+# Selfrag CLI wrapper script
+cd "$(dirname "${BASH_SOURCE[0]}")"
+python3 selfrag_cli.py "$@"
