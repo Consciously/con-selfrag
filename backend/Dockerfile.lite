@@ -1,0 +1,74 @@
+# Lightweight Dockerfile for development without ML dependencies
+# Use this if you want to develop without the full RAG pipeline
+FROM python:3.12-slim AS dev-lite
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency files
+COPY pyproject.toml README.md ./
+
+# Install only core dependencies (no ML packages)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir \
+    fastapi \
+    uvicorn \
+    pydantic \
+    loguru \
+    openai \
+    httpx \
+    requests \
+    asyncpg \
+    "redis[hiredis]" \
+    qdrant-client \
+    pytest \
+    pytest-asyncio \
+    black \
+    mypy \
+    isort
+
+# Copy application code
+COPY app/ ./app/
+COPY test_*.py ./
+
+# Development stage complete - core functionality only
+
+# Runtime stage
+FROM python:3.12-slim AS runtime-lite
+
+# Create non-root user
+RUN groupadd -g 1000 llmuser && \
+    useradd -r -u 1000 -g llmuser llmuser
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy dependencies and code
+COPY --from=dev-lite /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=dev-lite /usr/local/bin /usr/local/bin
+COPY --chown=llmuser:llmuser pyproject.toml README.md ./
+COPY --chown=llmuser:llmuser app/ ./app/
+
+# Switch to non-root user
+USER llmuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
