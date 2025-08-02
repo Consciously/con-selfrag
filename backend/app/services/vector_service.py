@@ -19,8 +19,6 @@ except ImportError:
     QDRANT_AVAILABLE = False
 
 from ..database.connection import get_qdrant_client
-from ..database.models import Base  # Import base for any database models we need
-# TODO: DocumentChunk model should be defined in database/models.py
 from ..logging_utils import get_logger
 from ..config import config
 

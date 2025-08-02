@@ -13,8 +13,6 @@ import asyncpg
 import redis.asyncio as redis
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
 
 from ..logging_utils import get_logger
 
@@ -28,8 +26,6 @@ class DatabasePools:
         self.postgres_pool: Optional[asyncpg.Pool] = None
         self.redis_pool: Optional[redis.ConnectionPool] = None
         self.qdrant_client: Optional[QdrantClient] = None
-        self.async_engine = None
-        self.async_session_factory = None
         self._initialized = False
     
     async def initialize(self) -> bool:
@@ -98,52 +94,12 @@ class DatabasePools:
                 "host": os.getenv("POSTGRES_HOST", "localhost")
             })
             
-            # Also initialize SQLAlchemy async engine for ORM operations
-            await self._init_sqlalchemy_engine()
-            
+
         except Exception as e:
             logger.error("Failed to initialize PostgreSQL pool", extra={"error": str(e)}, exc_info=True)
             raise
     
-    async def _init_sqlalchemy_engine(self):
-        """Initialize SQLAlchemy async engine for ORM operations."""
-        try:
-            # Build PostgreSQL URL for SQLAlchemy
-            postgres_url = os.getenv("POSTGRES_URL")
-            if postgres_url:
-                # Convert asyncpg URL to SQLAlchemy async URL
-                sqlalchemy_url = postgres_url.replace("postgresql://", "postgresql+asyncpg://")
-            else:
-                # Build from components
-                host = os.getenv("POSTGRES_HOST", "localhost")
-                port = os.getenv("POSTGRES_PORT", "5432")
-                user = os.getenv("POSTGRES_USER", "con_selfrag")
-                password = os.getenv("POSTGRES_PASSWORD", "con_selfrag_password")
-                database = os.getenv("POSTGRES_DB", "con_selfrag")
-                sqlalchemy_url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
-            
-            # Create async engine
-            self.async_engine = create_async_engine(
-                sqlalchemy_url,
-                pool_size=5,
-                max_overflow=10,
-                pool_pre_ping=True,
-                echo=False  # Set to True for SQL debugging
-            )
-            
-            # Create session factory
-            self.async_session_factory = async_sessionmaker(
-                self.async_engine,
-                class_=AsyncSession,
-                expire_on_commit=False
-            )
-            
-            logger.info("SQLAlchemy async engine initialized")
-            
-        except Exception as e:
-            logger.error("Failed to initialize SQLAlchemy engine", extra={"error": str(e)}, exc_info=True)
-            raise
-    
+
     async def _init_redis_pool(self):
         """Initialize Redis connection pool."""
         try:
@@ -235,22 +191,7 @@ class DatabasePools:
             raise RuntimeError("Qdrant client not initialized")
         return self.qdrant_client
     
-    @asynccontextmanager
-    async def get_async_session(self):
-        """Get a SQLAlchemy async session."""
-        if not self.async_session_factory:
-            raise RuntimeError("SQLAlchemy async session factory not initialized")
-        
-        async with self.async_session_factory() as session:
-            try:
-                yield session
-            except Exception as e:
-                await session.rollback()
-                logger.error("SQLAlchemy session error", extra={"error": str(e)})
-                raise
-            finally:
-                await session.close()
-    
+
     async def health_check(self) -> Dict[str, Any]:
         """Check health of all database connections."""
         health_status = {
@@ -334,11 +275,6 @@ class DatabasePools:
 
 # Global database pools instance
 db_pools = DatabasePools()
-
-
-def get_database_pools() -> DatabasePools:
-    """Get the global database pools instance."""
-    return db_pools
 
 
 async def check_database_readiness() -> Dict[str, Any]:

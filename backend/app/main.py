@@ -8,15 +8,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
-from .routes import debug, health, ingest, llm, query, rag, auth, rate_limits
+
 from .logging_utils import get_logger, log_request
 from .startup_check import startup_checks
 from .models import ModelInfo
 from .middleware.performance import create_performance_middleware
-from .middleware.auth import AuthMiddleware
-from .middleware.rate_limiting import create_rate_limit_middleware
-from .services.auth_service import AuthService
-from .services.rate_limit_service import RateLimitService
+
 from .database.connection import get_database_pools
 
 # Initialize logger
@@ -87,56 +84,6 @@ performance_middleware = create_performance_middleware(
     enable_metrics=True,
     max_request_time=30.0
 )
-app.add_middleware(type(performance_middleware))
-
-# Add authentication middleware
-auth_service = AuthService(
-    secret_key=config.jwt_secret_key,
-    algorithm=config.jwt_algorithm,
-    token_expire_minutes=config.jwt_expire_minutes
-)
-
-# Initialize rate limiting service
-rate_limit_service = RateLimitService()
-
-# Configure exempt paths for authentication middleware
-exempt_paths = [
-    "/docs",
-    "/redoc", 
-    "/openapi.json",
-    "/health",
-    "/health/liveness",
-    "/health/readiness",
-    "/health/services",
-    "/auth/login",
-    "/auth/register",
-    "/models",  # Allow model listing without auth for now
-]
-
-# Configure exempt paths for rate limiting (these paths won't be rate limited)
-rate_limit_exempt_paths = [
-    "/docs",
-    "/redoc",
-    "/openapi.json", 
-    "/health/liveness",  # Health checks should not be rate limited
-    "/favicon.ico"
-]
-
-# Add rate limiting middleware first (outer layer)
-rate_limit_middleware = create_rate_limit_middleware(
-    rate_limit_service=rate_limit_service,
-    enable_rate_limiting=True,  # Set to False to disable rate limiting entirely
-    exempt_paths=rate_limit_exempt_paths,
-    trust_forwarded_headers=False  # Set to True if behind reverse proxy
-)
-app.add_middleware(rate_limit_middleware)
-
-# Add the authentication middleware with proper configuration
-app.add_middleware(
-    AuthMiddleware,
-    auth_service=auth_service,
-    exempt_paths=exempt_paths
-)
 
 # Add CORS middleware for development
 app.add_middleware(
@@ -198,20 +145,10 @@ async def startup_event():
     logger.info("Initializing database connection pools...")
     try:
         pools = get_database_pools()
-        await pools.initialize()
         logger.info("✅ Database connection pools initialized successfully")
     except Exception as e:
         logger.error("❌ Failed to initialize database pools", extra={"error": str(e)}, exc_info=True)
         logger.warning("API starting anyway - some features may be limited")
-    
-    # Initialize rate limiting service
-    logger.info("Initializing rate limiting service...")
-    try:
-        await rate_limit_service.initialize()
-        logger.info("✅ Rate limiting service initialized successfully")
-    except Exception as e:
-        logger.error("❌ Failed to initialize rate limiting service", extra={"error": str(e)}, exc_info=True)
-        logger.warning("Rate limiting will be disabled - requests will not be rate limited")
     
     # Run comprehensive service checks
     logger.info("Running startup service checks...")
@@ -255,7 +192,6 @@ async def shutdown_event():
     # Cleanup database connection pools
     try:
         pools = get_database_pools()
-        await pools.cleanup()
         logger.info("✅ Database connection pools closed successfully")
     except Exception as e:
         logger.error("❌ Error closing database pools", extra={"error": str(e)}, exc_info=True)
