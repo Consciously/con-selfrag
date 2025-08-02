@@ -1,46 +1,52 @@
-# Multi-stage Dockerfile for development and production
-FROM python:3.12-slim AS dev
+# Lightweight Dockerfile for development without ML dependencies
+# Use this if you want to develop without the full RAG pipeline
+FROM python:3.12-slim AS dev-lite
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies and development tools for ML packages
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     bash \
-    gcc \
-    g++ \
-    make \
-    python3-dev \
-    build-essential \
-    libffi-dev \
-    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files
 COPY pyproject.toml README.md ./
 
-# Install all dependencies including dev tools
-# Install in specific order to handle dependencies better
+# Install only core dependencies (no ML packages)
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir numpy && \
-    pip install --no-cache-dir -e ".[dev]" && \
-    pip install --no-cache-dir uv
+    pip install --no-cache-dir \
+    fastapi \
+    uvicorn \
+    pydantic \
+    loguru \
+    openai \
+    httpx \
+    requests \
+    asyncpg \
+    "redis[hiredis]" \
+    qdrant-client \
+    pytest \
+    pytest-asyncio \
+    black \
+    mypy \
+    isort
 
 # Copy application code
 COPY app/ ./app/
 COPY test_*.py ./
 
-# Development stage complete - includes all dev tools
+# Development stage complete - core functionality only
 
-# Runtime stage - slim production image
-FROM python:3.12-slim AS runtime
+# Runtime stage
+FROM python:3.12-slim AS runtime-lite
 
-# Create non-root user for security
+# Create non-root user
 RUN groupadd -g 1000 llmuser && \
     useradd -r -u 1000 -g llmuser llmuser
 
-# Install minimal runtime dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     bash \
@@ -48,9 +54,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy only production dependencies from dev stage
-COPY --from=dev /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=dev /usr/local/bin /usr/local/bin
+# Copy dependencies and code
+COPY --from=dev-lite /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=dev-lite /usr/local/bin /usr/local/bin
 COPY --chown=llmuser:llmuser pyproject.toml README.md ./
 COPY --chown=llmuser:llmuser app/ ./app/
 

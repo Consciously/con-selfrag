@@ -10,17 +10,31 @@ requires-python = ">=3.11"
 
 # Minimal essential dependencies following YAGNI principles
 dependencies = [
+    # Core web framework dependencies
     "fastapi>=0.104.0",
-    "openai>=1.0.0",  # OpenAI client for LocalAI compatibility
-    "loguru>=0.7.0",
-    "pydantic>=2.0.0",
     "uvicorn>=0.24.0",
-    "requests>=2.31.0",  # HTTP requests for tests and utilities
+    "pydantic>=2.0.0",
+    "loguru>=0.7.0",
+    
+    # HTTP client dependencies
+    "openai>=1.0.0",  # OpenAI client for LocalAI compatibility
     "httpx>=0.25.0",  # Async HTTP client
-    # Database dependencies for Milestone 2
+    "requests>=2.31.0",  # HTTP requests for tests and utilities
+    
+    # Math and ML dependencies (install early to avoid conflicts)
+    "numpy>=1.24.0",  # Required for embeddings and vector operations
+    
+    # Database dependencies for RAG pipeline
     "asyncpg>=0.29.0",        # PostgreSQL async driver
     "redis[hiredis]>=5.0.0",  # Redis async client with hiredis for performance
     "qdrant-client>=1.7.0",   # Qdrant vector database client
+    
+    # RAG pipeline dependencies (install after numpy)
+    "sentence-transformers>=2.2.0",  # For embeddings generation
+    
+    # CLI dependencies
+    "click>=8.1.0",     # Command-line interface framework
+    "rich>=13.0.0",     # Rich text and beautiful formatting in terminal
 ]
 
 [project.optional-dependencies]
@@ -38,6 +52,9 @@ dev = [
 # postgres = ["asyncpg>=0.29.0", "sqlalchemy>=2.0.0"]
 # qdrant = ["qdrant-client>=1.7.0"]
 # database = ["localai-llm-template[postgres,qdrant]"]
+
+[project.scripts]
+selfrag = "app.cli.main:cli"
 
 [build-system]
 requires = ["hatchling>=1.18.0"]

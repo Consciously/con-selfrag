@@ -5,6 +5,8 @@ Health check endpoints for monitoring service status.
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
+from ..services.embedding_service import EmbeddingService
+from ..services.vector_service import VectorService
 from ..logging_utils import get_logger
 from ..startup_check import service_checker
 
@@ -304,3 +306,4 @@ async def llm_health_check():
             status_code=503,
             detail=health_status
         ) from e
+
