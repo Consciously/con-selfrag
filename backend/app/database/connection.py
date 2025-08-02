@@ -304,3 +304,8 @@ async def get_redis_connection():
 def get_qdrant_client() -> QdrantClient:
     """Get Qdrant client."""
     return db_pools.get_qdrant_client()
+
+
+def get_database_pools() -> DatabasePools:
+    """Get the global database pools instance."""
+    return db_pools
