@@ -21,6 +21,16 @@ dependencies = [
     "httpx>=0.25.0",  # Async HTTP client
     "requests>=2.31.0",  # HTTP requests for tests and utilities
     
+    # Authentication dependencies
+    "PyJWT>=2.8.0",          # JSON Web Token implementation
+    "passlib[bcrypt]>=1.7.4", # Password hashing library with bcrypt
+    "python-multipart>=0.0.6", # Form data parsing for login endpoints
+    "email-validator>=2.0.0",  # Email validation for user registration
+    
+    # Database dependencies for authentication and data storage
+    "sqlalchemy>=2.0.0",     # ORM for database operations
+    "alembic>=1.12.0",       # Database migrations
+    
     # Math and ML dependencies (install early to avoid conflicts)
     "numpy>=1.24.0",  # Required for embeddings and vector operations
     

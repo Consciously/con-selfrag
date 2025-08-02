@@ -43,10 +43,39 @@ class Config(BaseModel):
     search_limit: int = Field(default=10, description="Default number of search results")
     search_threshold: float = Field(default=0.5, description="Minimum similarity score for search results")
 
+    # Authentication settings
+    jwt_secret_key: str = Field(
+        default="your-secret-key-change-in-production-please",
+        description="JWT secret key for token signing"
+    )
+    jwt_expire_minutes: int = Field(default=1440, description="JWT token expiration in minutes (24 hours)")
+    jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
+    
+    # Security settings
+    password_min_length: int = Field(default=8, description="Minimum password length")
+    api_key_expire_days: int = Field(default=365, description="Default API key expiration in days")
+    max_login_attempts: int = Field(default=5, description="Maximum login attempts before lockout")
+    lockout_duration_minutes: int = Field(default=15, description="Account lockout duration in minutes")
+
     @property
     def localai_base_url(self) -> str:
         """Get LocalAI base URL."""
         return f"http://{self.localai_host}:{self.localai_port}/v1"
+
+    @property
+    def postgres_connection_url(self) -> str:
+        """Build PostgreSQL connection URL from environment variables."""
+        if self.postgres_url:
+            return self.postgres_url
+        
+        # Build from individual components
+        host = os.getenv("POSTGRES_HOST", "localhost")
+        port = os.getenv("POSTGRES_PORT", "5432")
+        user = os.getenv("POSTGRES_USER", "con_selfrag")
+        password = os.getenv("POSTGRES_PASSWORD", "con_selfrag_password")
+        database = os.getenv("POSTGRES_DB", "con_selfrag")
+        
+        return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
 
 
 def load_config() -> Config:
@@ -72,6 +101,14 @@ def load_config() -> Config:
         search_limit=int(os.getenv("SEARCH_LIMIT", "10")),
         search_threshold=float(os.getenv("SEARCH_THRESHOLD", "0.5")),
         cors_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+        # Authentication settings
+        jwt_secret_key=os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-please"),
+        jwt_expire_minutes=int(os.getenv("JWT_EXPIRE_MINUTES", "1440")),
+        jwt_algorithm=os.getenv("JWT_ALGORITHM", "HS256"),
+        password_min_length=int(os.getenv("PASSWORD_MIN_LENGTH", "8")),
+        api_key_expire_days=int(os.getenv("API_KEY_EXPIRE_DAYS", "365")),
+        max_login_attempts=int(os.getenv("MAX_LOGIN_ATTEMPTS", "5")),
+        lockout_duration_minutes=int(os.getenv("LOCKOUT_DURATION_MINUTES", "15")),
     )
 
 
