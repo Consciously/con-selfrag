@@ -2,14 +2,15 @@
 Content query service for handling search business logic.
 
 This service encapsulates the business logic for content querying and semantic search,
-using vector similarity search with embeddings and metadata filtering.
+using vector similarity search with embeddings, caching, and metadata filtering for optimal performance.
 """
 
 import time
-from typing import Any, List
+from typing import Any, List, Optional, Dict
 
 from .embedding_service import EmbeddingService
 from .vector_service import VectorService
+from .cache_service import get_cached_query_result, cache_query_result
 from ..models.response_models import QueryResponse, QueryResult
 from ..config import config
 from ..logging_utils import get_logger
@@ -18,20 +19,22 @@ logger = get_logger(__name__)
 
 
 class QueryService:
-    """Service for handling content query business logic."""
+    """Service for handling content query business logic with advanced caching."""
     
     def __init__(self):
         """Initialize the query service with search components."""
         self.embedding_service = EmbeddingService(
-            model_name=config.embedding_model
+            model_name=config.embedding_model,
+            use_cache=True
         )
         self.vector_service = VectorService()
+        self._query_cache_ttl = 3600  # 1 hour for query results
 
     async def query_content(
         self, query: str, limit: int = None, filters: dict[str, Any] | None = None
     ) -> QueryResponse:
         """
-        Query content using semantic vector search.
+        Query content using semantic vector search with multi-level caching.
 
         Args:
             query: Natural language search query
@@ -66,7 +69,24 @@ class QueryService:
                 }
             )
 
-            # Step 1: Generate embedding for the query
+            # Check query result cache first
+            cached_result = await get_cached_query_result(query, filters, limit)
+            if cached_result is not None:
+                # Update timing for cached result
+                query_time_ms = int((time.time() - start_time) * 1000)
+                cached_result.query_time_ms = query_time_ms
+                
+                logger.info(
+                    "Query result served from cache",
+                    extra={
+                        "query": query,
+                        "cached_results": len(cached_result.results),
+                        "query_time_ms": query_time_ms
+                    }
+                )
+                return cached_result
+
+            # Step 1: Generate embedding for the query (uses embedding cache)
             query_embedding = await self.embedding_service.generate_embedding(query)
             
             logger.debug(
@@ -99,6 +119,17 @@ class QueryService:
             # Calculate query processing time
             query_time_ms = int((time.time() - start_time) * 1000)
 
+            # Create response object
+            response = QueryResponse(
+                query=query,
+                results=query_results,
+                total_results=len(query_results),
+                query_time_ms=query_time_ms,
+            )
+
+            # Cache the result for future queries
+            await cache_query_result(query, response, filters, limit, self._query_cache_ttl)
+
             logger.info(
                 "Semantic search completed successfully",
                 extra={
@@ -106,16 +137,12 @@ class QueryService:
                     "total_results": len(query_results),
                     "query_time_ms": query_time_ms,
                     "applied_filters": filters,
-                    "avg_relevance": sum(r.relevance_score for r in query_results) / len(query_results) if query_results else 0
+                    "avg_relevance": sum(r.relevance_score for r in query_results) / len(query_results) if query_results else 0,
+                    "cached": True
                 }
             )
 
-            return QueryResponse(
-                query=query,
-                results=query_results,
-                total_results=len(query_results),
-                query_time_ms=query_time_ms,
-            )
+            return response
 
         except ValueError as e:
             logger.error(

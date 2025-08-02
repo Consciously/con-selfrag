@@ -1,81 +1,72 @@
 """
-Vector database service for Qdrant integration.
+Vector database service for Qdrant operations with optimized connection management.
 
-This service handles all vector database operations including
-embedding storage, similarity search, and metadata filtering.
+This service handles all vector database operations using Qdrant,
+including document storage, similarity search, and collection management
+with connection pooling for improved performance.
 """
 
+import asyncio
+from typing import List, Optional, Dict, Any
 import uuid
-from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass
 
-from qdrant_client import QdrantClient
-from qdrant_client.models import (
-    Distance, VectorParams, CreateCollection,
-    PointStruct, Filter, FieldCondition, MatchValue,
-    SearchRequest, ScoredPoint
-)
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.http.models import VectorParams, Distance, PointStruct, Filter, FieldCondition, MatchValue
+    from qdrant_client.http.exceptions import UnexpectedResponse
+    QDRANT_AVAILABLE = True
+except ImportError:
+    QDRANT_AVAILABLE = False
 
-from .document_processor import DocumentChunk
-from ..config import config
+from ..database.connection import get_qdrant_client
+from ..models import DocumentChunk
 from ..logging_utils import get_logger
+from ..config import config
 
 logger = get_logger(__name__)
 
 
-@dataclass
 class SearchResult:
-    """Represents a search result from vector database."""
-    id: str
-    content: str
-    score: float
-    metadata: Dict[str, Any]
-    chunk_id: str
-    document_id: str
+    """Represents a search result from vector similarity search."""
+    
+    def __init__(self, id: str, content: str, score: float, metadata: Dict[str, Any], 
+                 chunk_id: str = "", document_id: str = ""):
+        self.id = id
+        self.content = content
+        self.score = score
+        self.metadata = metadata
+        self.chunk_id = chunk_id
+        self.document_id = document_id
 
 
 class VectorService:
-    """Service for vector database operations using Qdrant."""
+    """Service for vector database operations using Qdrant with connection pooling."""
     
-    def __init__(self):
-        """Initialize Qdrant client and configuration."""
-        self.client = None
-        self.collection_name = "documents"
-        self.vector_size = 384  # Default for sentence-transformers/all-MiniLM-L6-v2
-        self._ensure_connection()
+    def __init__(self, collection_name: str = "documents", vector_size: int = 384):
+        """
+        Initialize the vector service.
+        
+        Args:
+            collection_name: Name of the Qdrant collection
+            vector_size: Size of the embedding vectors
+        """
+        self.collection_name = collection_name
+        self.vector_size = vector_size
+        logger.info(
+            "Initialized VectorService",
+            extra={
+                "collection": collection_name,
+                "vector_size": vector_size
+            }
+        )
     
-    def _ensure_connection(self):
-        """Ensure Qdrant client is connected."""
+    def _get_client(self) -> QdrantClient:
+        """Get Qdrant client from connection pool."""
         try:
-            # Connect to Qdrant (adjust host/port based on your docker-compose setup)
-            qdrant_host = getattr(config, 'qdrant_host', 'localhost')
-            qdrant_port = getattr(config, 'qdrant_port', 6333)
-            
-            self.client = QdrantClient(
-                host=qdrant_host,
-                port=qdrant_port,
-                timeout=30.0
-            )
-            
-            # Test connection
-            collections = self.client.get_collections()
-            logger.info(
-                "Connected to Qdrant successfully",
-                extra={
-                    "host": qdrant_host,
-                    "port": qdrant_port,
-                    "collections_count": len(collections.collections)
-                }
-            )
-            
-        except Exception as e:
-            logger.error(
-                "Failed to connect to Qdrant",
-                extra={"error": str(e)},
-                exc_info=True
-            )
-            # Continue without connection for now - can be handled gracefully
-            self.client = None
+            return get_qdrant_client()
+        except RuntimeError as e:
+            logger.error("Failed to get Qdrant client", extra={"error": str(e)})
+            return None
     
     async def ensure_collection_exists(self) -> bool:
         """
@@ -85,13 +76,14 @@ class VectorService:
             True if collection exists or was created successfully
         """
         try:
-            if not self.client:
+            client = await self.get_client()
+            if not client:
                 logger.warning("Qdrant client not available")
                 return False
             
             # Check if collection exists
             try:
-                collection_info = self.client.get_collection(self.collection_name)
+                collection_info = client.get_collection(self.collection_name)
                 logger.info(
                     "Collection already exists",
                     extra={
@@ -105,7 +97,7 @@ class VectorService:
                 pass
             
             # Create collection
-            self.client.create_collection(
+            client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(
                     size=self.vector_size,
@@ -149,7 +141,8 @@ class VectorService:
             True if storage was successful
         """
         try:
-            if not self.client:
+            client = await self.get_client()
+            if not client:
                 logger.warning("Qdrant client not available - skipping vector storage")
                 return False
             
@@ -180,7 +173,7 @@ class VectorService:
                 points.append(point)
             
             # Store in Qdrant
-            operation_info = self.client.upsert(
+            operation_info = client.upsert(
                 collection_name=self.collection_name,
                 points=points
             )
@@ -226,7 +219,8 @@ class VectorService:
             List of SearchResult objects
         """
         try:
-            if not self.client:
+            client = await self.get_client()
+            if not client:
                 logger.warning("Qdrant client not available - returning empty results")
                 return []
             
@@ -245,7 +239,7 @@ class VectorService:
                     filter_conditions = Filter(must=conditions)
             
             # Perform similarity search
-            search_results = self.client.search(
+            search_results = client.search(
                 collection_name=self.collection_name,
                 query_vector=query_embedding,
                 limit=limit,
@@ -304,7 +298,8 @@ class VectorService:
             True if deletion was successful
         """
         try:
-            if not self.client:
+            client = await self.get_client()
+            if not client:
                 logger.warning("Qdrant client not available")
                 return False
             
@@ -313,7 +308,7 @@ class VectorService:
                 must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]
             )
             
-            operation_info = self.client.delete(
+            operation_info = client.delete(
                 collection_name=self.collection_name,
                 points_selector=filter_condition
             )
@@ -346,10 +341,11 @@ class VectorService:
             Dictionary with collection statistics
         """
         try:
-            if not self.client:
+            client = await self.get_client()
+            if not client:
                 return {"error": "Qdrant client not available"}
             
-            collection_info = self.client.get_collection(self.collection_name)
+            collection_info = client.get_collection(self.collection_name)
             
             stats = {
                 "collection_name": self.collection_name,
@@ -370,15 +366,3 @@ class VectorService:
                 exc_info=True
             )
             return {"error": str(e)}
-    
-    def close(self):
-        """Close the Qdrant client connection."""
-        if self.client:
-            try:
-                self.client.close()
-                logger.info("Closed Qdrant client connection")
-            except Exception as e:
-                logger.error(
-                    "Error closing Qdrant client",
-                    extra={"error": str(e)}
-                )
