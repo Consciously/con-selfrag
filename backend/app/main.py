@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
-from .routes import debug, health, ingest, llm, query, rag
+from .routes import debug, health, ingest, llm, query
 from .logging_utils import get_logger, log_request
 from .startup_check import startup_checks
 from .models import ModelInfo
