@@ -1,0 +1,38 @@
+# LocalAI Configuration for CON-SelfRAG
+# Optimized for embedding generation and text completion
+
+models:
+  # Embedding model configuration
+  - name: text-embedding-ada-002
+    backend: bert-embeddings
+    embeddings: true
+    model: all-MiniLM-L6-v2
+    parameters:
+      model: all-MiniLM-L6-v2
+
+  # Lightweight text generation model
+  - name: gpt-3.5-turbo
+    backend: llama-cpp
+    model: ggml-gpt4all-j-v1.3-groovy.bin
+    context_size: 2048
+    threads: 4
+    temperature: 0.7
+    top_k: 40
+    top_p: 0.95
+
+  # Fallback small model for testing
+  - name: gpt-4
+    backend: llama-cpp
+    model: ggml-model-q4_0.bin
+    context_size: 1024
+    threads: 2
+    temperature: 0.7
+
+# Performance settings
+debug: false
+single_active_backend: false
+parallel_requests: true
+cors: true
+
+# Resource optimization
+preload_models: text-embedding-ada-002

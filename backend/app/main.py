@@ -16,6 +16,9 @@ from .middleware.performance import create_performance_middleware
 
 from .database.connection import get_database_pools
 
+# Import route modules
+from .routes import auth, debug, health, ingest, llm, query, rag, rate_limits
+
 # Initialize logger
 logger = get_logger(__name__)
 
