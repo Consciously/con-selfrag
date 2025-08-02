@@ -1,12 +1,14 @@
 """
-Health check endpoints for monitoring service status.
+Health check endpoints for monitoring service status and performance metrics.
 """
 
 from datetime import datetime
+from typing import Dict, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from ..services.embedding_service import EmbeddingService
 from ..services.vector_service import VectorService
+from ..database.connection import get_database_pools
 from ..logging_utils import get_logger
 from ..startup_check import service_checker
 
@@ -307,3 +309,195 @@ async def llm_health_check():
             detail=health_status
         ) from e
 
+
+@router.get(
+    "/metrics",
+    summary="Performance Metrics",
+    description="""
+    **Get comprehensive performance metrics and cache analytics.**
+    
+    Returns real-time performance data including:
+    - Request timing and throughput statistics
+    - Cache hit rates and effectiveness
+    - Database connection pool health
+    - Response compression statistics
+    - Slow request monitoring
+    
+    **Use Cases:**
+    - Performance monitoring and optimization
+    - Cache effectiveness analysis
+    - System health assessment
+    - Capacity planning and scaling decisions
+    """
+)
+async def get_performance_metrics(request: Request) -> Dict[str, Any]:
+    """Get comprehensive performance metrics and system statistics."""
+    try:
+        logger.debug("Performance metrics requested")
+        
+        metrics = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "performance": {},
+            "cache": {},
+            "database_pools": {},
+            "system": {}
+        }
+        
+        # Get performance middleware metrics if available
+        try:
+            # Check if performance middleware is available
+            app = request.app
+            for middleware in app.user_middleware:
+                if hasattr(middleware[0], 'get_metrics'):
+                    performance_metrics = middleware[0].get_metrics()
+                    metrics["performance"] = performance_metrics
+                    break
+            else:
+                metrics["performance"] = {"error": "Performance middleware not found"}
+        except Exception as e:
+            logger.warning(f"Failed to get performance metrics: {str(e)}")
+            metrics["performance"] = {"error": str(e)}
+        
+        # Get database connection pool metrics
+        try:
+            pools = get_database_pools()
+            pool_stats = await pools.get_pool_stats()
+            metrics["database_pools"] = pool_stats
+        except Exception as e:
+            logger.warning(f"Failed to get database pool metrics: {str(e)}")
+            metrics["database_pools"] = {"error": str(e)}
+        
+        # Get cache service metrics if available
+        try:
+            from ..services.cache_service import CacheService
+            cache_service = CacheService()
+            cache_stats = await cache_service.get_cache_analytics()
+            metrics["cache"] = cache_stats
+        except Exception as e:
+            logger.warning(f"Failed to get cache metrics: {str(e)}")
+            metrics["cache"] = {"error": str(e)}
+        
+        # Get basic system information
+        try:
+            import psutil
+            import os
+            
+            process = psutil.Process(os.getpid())
+            memory_info = process.memory_info()
+            
+            metrics["system"] = {
+                "cpu_percent": psutil.cpu_percent(),
+                "memory": {
+                    "rss": memory_info.rss,
+                    "vms": memory_info.vms,
+                    "percent": process.memory_percent()
+                },
+                "process_id": os.getpid(),
+                "threads": process.num_threads(),
+                "open_files": len(process.open_files()) if hasattr(process, 'open_files') else 0
+            }
+        except ImportError:
+            # psutil not available
+            metrics["system"] = {"error": "psutil not available - install for system metrics"}
+        except Exception as e:
+            logger.warning(f"Failed to get system metrics: {str(e)}")
+            metrics["system"] = {"error": str(e)}
+        
+        logger.info("Performance metrics collected successfully")
+        return metrics
+        
+    except Exception as e:
+        logger.error(
+            "Failed to collect performance metrics",
+            extra={"error": str(e)},
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Failed to collect performance metrics", "details": str(e)}
+        ) from e
+
+
+@router.get(
+    "/cache/analytics",
+    summary="Cache Analytics",
+    description="""
+    **Get detailed cache performance analytics.**
+    
+    Returns comprehensive cache statistics including:
+    - L1 (memory) and L2 (Redis) cache hit rates
+    - Cache size and memory usage
+    - Most frequently accessed items
+    - Cache invalidation patterns
+    - Performance impact metrics
+    """
+)
+async def get_cache_analytics() -> Dict[str, Any]:
+    """Get detailed cache performance analytics."""
+    try:
+        logger.debug("Cache analytics requested")
+        
+        from ..services.cache_service import CacheService
+        cache_service = CacheService()
+        
+        analytics = await cache_service.get_cache_analytics()
+        analytics["timestamp"] = datetime.utcnow().isoformat() + "Z"
+        
+        logger.info("Cache analytics collected successfully")
+        return analytics
+        
+    except Exception as e:
+        logger.error(
+            "Failed to get cache analytics",
+            extra={"error": str(e)},
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Failed to get cache analytics", "details": str(e)}
+        ) from e
+
+
+@router.post(
+    "/cache/clear",
+    summary="Clear Cache",
+    description="""
+    **Clear all cached data for performance testing or troubleshooting.**
+    
+    This endpoint clears both L1 (memory) and L2 (Redis) caches.
+    Use with caution as this will cause temporary performance degradation
+    while caches rebuild.
+    """
+)
+async def clear_cache() -> Dict[str, Any]:
+    """Clear all cached data."""
+    try:
+        logger.info("Cache clear requested")
+        
+        from ..services.cache_service import CacheService
+        cache_service = CacheService()
+        
+        # Clear both L1 and L2 caches
+        l1_cleared = await cache_service.clear_l1_cache()
+        l2_cleared = await cache_service.clear_l2_cache()
+        
+        result = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "l1_cache_cleared": l1_cleared,
+            "l2_cache_cleared": l2_cleared,
+            "status": "success" if (l1_cleared and l2_cleared) else "partial"
+        }
+        
+        logger.info("Cache cleared successfully", extra=result)
+        return result
+        
+    except Exception as e:
+        logger.error(
+            "Failed to clear cache",
+            extra={"error": str(e)},
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Failed to clear cache", "details": str(e)}
+        ) from e

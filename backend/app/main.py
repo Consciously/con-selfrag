@@ -1,5 +1,6 @@
 """
 FastAPI application with clean, extensible architecture and structured logging.
+Enhanced with Performance & Caching Layer for optimal throughput and response times.
 """
 
 import time
@@ -7,10 +8,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import config
-from .routes import debug, health, ingest, llm, query
+from .routes import debug, health, ingest, llm, query, rag
 from .logging_utils import get_logger, log_request
 from .startup_check import startup_checks
 from .models import ModelInfo
+from .middleware.performance import create_performance_middleware
+from .database.connection import get_database_pools
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -19,11 +22,19 @@ logger = get_logger(__name__)
 app = FastAPI(
     title="Selfrag LLM API",
     description="""
-    **Selfrag LLM API - Modular Backend Interface**
+    **Selfrag LLM API - High-Performance Modular Backend**
 
-    A clean, extensible FastAPI backend for AI-powered applications with integrated LLM capabilities.
+    A clean, extensible FastAPI backend for AI-powered applications with integrated LLM capabilities
+    and Performance & Caching Layer for optimal throughput and response times.
 
-    ## Features
+    ## Performance Features
+    - **Connection Pooling**: Optimized database connections for PostgreSQL, Redis, and Qdrant
+    - **Multi-Level Caching**: L1 (memory) + L2 (Redis) caching for embeddings and query results
+    - **Response Compression**: Automatic gzip compression for bandwidth optimization
+    - **Performance Monitoring**: Real-time metrics collection and slow request detection
+    - **Async Processing**: Non-blocking operations for maximum throughput
+
+    ## Core Features
     - **Health Monitoring**: Service health and readiness checks
     - **Content Ingestion**: Add content with metadata for processing
     - **Natural Language Search**: Query content using semantic search
@@ -44,6 +55,10 @@ app = FastAPI(
     - **Direct Generate**: `/debug/generate` - Test text generation directly
     - **Service Status**: `/debug/status` - Inspect LocalAI configuration and status
 
+    ## Performance Monitoring
+    - **Metrics**: `/health/metrics` - Performance statistics and cache analytics
+    - **Database Health**: `/health/services` - Connection pool status and health checks
+
     ## Getting Started
     1. Start the service: `uvicorn app.main:app --reload`
     2. Open Swagger UI: http://localhost:8000/docs
@@ -51,14 +66,24 @@ app = FastAPI(
 
     ## Architecture
     - **Routes**: HTTP endpoint handlers
-    - **Services**: Business logic layer
+    - **Services**: Business logic layer with caching
     - **Models**: Pydantic models for validation
-    - **Clients**: External service integrations (LocalAI, Qdrant, PostgreSQL, Redis)
+    - **Clients**: Pooled connections (LocalAI, Qdrant, PostgreSQL, Redis)
+    - **Middleware**: Performance optimization and monitoring
     """,
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Add performance middleware first (processes requests before CORS)
+performance_middleware = create_performance_middleware(
+    enable_compression=True,
+    compression_threshold=1024,
+    enable_metrics=True,
+    max_request_time=30.0
+)
+app.add_middleware(type(performance_middleware), app=app)
 
 # Add CORS middleware for development
 app.add_middleware(
@@ -108,13 +133,23 @@ async def log_requests(request: Request, call_next):
 # Log application startup
 @app.on_event("startup")
 async def startup_event():
-    """Log application startup and run service checks."""
-    logger.info("🚀 Selfrag API starting up...")
+    """Log application startup, initialize database pools, and run service checks."""
+    logger.info("🚀 Selfrag API with Performance & Caching Layer starting up...")
     logger.info(f"Server: {config.host}:{config.port}")
     logger.info(f"LocalAI: {config.localai_base_url}")
     logger.info(f"Default model: {config.default_model}")
     logger.info(f"Log level: {config.log_level}")
     logger.info(f"CORS origins: {config.cors_origins}")
+    
+    # Initialize database connection pools
+    logger.info("Initializing database connection pools...")
+    try:
+        pools = get_database_pools()
+        await pools.initialize_all()
+        logger.info("✅ Database connection pools initialized successfully")
+    except Exception as e:
+        logger.error("❌ Failed to initialize database pools", extra={"error": str(e)}, exc_info=True)
+        logger.warning("API starting anyway - some features may be limited")
     
     # Run comprehensive service checks
     logger.info("Running startup service checks...")
@@ -152,8 +187,17 @@ async def startup_event():
 # Log application shutdown
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Log application shutdown."""
+    """Log application shutdown and cleanup resources."""
     logger.info("🛑 Selfrag API shutting down...")
+    
+    # Cleanup database connection pools
+    try:
+        pools = get_database_pools()
+        await pools.close_all()
+        logger.info("✅ Database connection pools closed successfully")
+    except Exception as e:
+        logger.error("❌ Error closing database pools", extra={"error": str(e)}, exc_info=True)
+    
     logger.info("Graceful shutdown completed")
 
 # Include modular routes
