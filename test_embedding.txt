@@ -1,0 +1,5 @@
+Machine learning is a subset of artificial intelligence that focuses on algorithms and statistical models.
+
+Natural language processing enables computers to understand and process human language.
+
+Deep learning uses neural networks to solve complex problems.
