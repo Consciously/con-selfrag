@@ -67,6 +67,10 @@ class VectorService:
             logger.error("Failed to get Qdrant client", extra={"error": str(e)})
             return None
     
+    async def get_client(self) -> Optional[QdrantClient]:
+        """Get Qdrant client (async wrapper for _get_client)."""
+        return self._get_client()
+    
     async def ensure_collection_exists(self) -> bool:
         """
         Ensure the documents collection exists in Qdrant.
@@ -348,7 +352,7 @@ class VectorService:
             
             stats = {
                 "collection_name": self.collection_name,
-                "vectors_count": collection_info.vectors_count,
+                "vectors_count": getattr(collection_info, 'points_count', 0),
                 "indexed_vectors_count": getattr(collection_info, 'indexed_vectors_count', 0),
                 "points_count": getattr(collection_info, 'points_count', 0),
                 "status": collection_info.status,

@@ -79,7 +79,7 @@ async def ingest_content(request: IngestRequest):
             "Processing RAG pipeline ingestion",
             extra={
                 "content_length": len(request.content),
-                "source": request.source,
+                "source": request.metadata.get("source", "unknown") if request.metadata else "unknown",
                 "has_metadata": bool(request.metadata),
                 "metadata_keys": list(request.metadata.keys()) if request.metadata else []
             }
@@ -87,7 +87,7 @@ async def ingest_content(request: IngestRequest):
 
         # Prepare metadata with source information
         ingestion_metadata = {
-            "source": request.source,
+            "source": request.metadata.get("source", "unknown") if request.metadata else "unknown",
             "ingestion_timestamp": datetime.utcnow().isoformat() + "Z",
             **(request.metadata or {})
         }
@@ -120,7 +120,7 @@ async def ingest_content(request: IngestRequest):
                 "processing_time_ms": processing_time,
                 "error": str(e),
                 "content_length": len(request.content),
-                "source": request.source
+                "source": request.metadata.get("source", "unknown") if request.metadata else "unknown"
             },
             exc_info=True
         )

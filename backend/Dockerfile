@@ -54,6 +54,15 @@ COPY --from=dev /usr/local/bin /usr/local/bin
 COPY --chown=llmuser:llmuser pyproject.toml README.md ./
 COPY --chown=llmuser:llmuser app/ ./app/
 
+# Create cache directory for sentence-transformers models
+RUN mkdir -p /app/.cache/huggingface && \
+    chown -R llmuser:llmuser /app/.cache
+
+# Set environment variables for model caching
+ENV SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence-transformers
+ENV HF_HOME=/app/.cache/huggingface
+ENV TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
+
 # Switch to non-root user
 USER llmuser
 

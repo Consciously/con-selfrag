@@ -52,7 +52,7 @@ class SelfrageAPIClient:
                 "metadata": metadata or {"source": file_path, "filename": Path(file_path).name}
             }
             
-            response = await self.client.post(f"{self.base_url}/ingest", json=payload)
+            response = await self.client.post(f"{self.base_url}/ingest/", json=payload)
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -66,7 +66,7 @@ class SelfrageAPIClient:
                 "metadata": metadata or {"source": "cli-text"}
             }
             
-            response = await self.client.post(f"{self.base_url}/ingest", json=payload)
+            response = await self.client.post(f"{self.base_url}/ingest/", json=payload)
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -80,7 +80,7 @@ class SelfrageAPIClient:
                 "limit": limit
             }
             
-            response = await self.client.post(f"{self.base_url}/query", json=payload)
+            response = await self.client.post(f"{self.base_url}/query/", json=payload)
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -89,7 +89,7 @@ class SelfrageAPIClient:
     async def get_rag_stats(self) -> Dict[str, Any]:
         """Get RAG pipeline statistics."""
         try:
-            response = await self.client.get(f"{self.base_url}/rag/stats")
+            response = await self.client.get(f"{self.base_url}/rag/collections/stats")
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -276,14 +276,13 @@ async def cmd_stats(args):
         print_error(f"Failed to get stats: {result.get('error')}")
         return
     
-    stats = result.get("stats", {})
-    collection_info = result.get("collection_info", {})
-    
+    # The API returns a flat structure with collection stats
     print("\n📈 RAG Pipeline Statistics:")
-    print(f"  Documents: {stats.get('total_documents', 0)}")
-    print(f"  Chunks: {stats.get('total_chunks', 0)}")
-    print(f"  Vectors: {collection_info.get('vectors_count', 0)}")
-    print(f"  Collection: {collection_info.get('status', 'unknown')}")
+    print(f"  Documents: {result.get('points_count', 0)}")  # Points represent document chunks
+    print(f"  Chunks: {result.get('points_count', 0)}")     # Each point is a chunk
+    print(f"  Vectors: {result.get('vectors_count', 0)}")
+    print(f"  Collection: {result.get('status', 'unknown')}")
+    print(f"  Vector Size: {result.get('vector_size', 0)} dimensions")
 
 
 async def cmd_chat(args):

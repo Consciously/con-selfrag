@@ -148,6 +148,7 @@ async def startup_event():
     logger.info("Initializing database connection pools...")
     try:
         pools = get_database_pools()
+        await pools.initialize()
         logger.info("✅ Database connection pools initialized successfully")
     except Exception as e:
         logger.error("❌ Failed to initialize database pools", extra={"error": str(e)}, exc_info=True)

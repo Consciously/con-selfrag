@@ -17,6 +17,7 @@ services:
       - POSTGRES_PORT=5432
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - SEARCH_THRESHOLD=0.0
     depends_on:
       localai:
         condition: service_healthy
