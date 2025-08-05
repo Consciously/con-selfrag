@@ -28,11 +28,18 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'curl', '--fail', 'http://localhost:8000/health/']
-      interval: 10s
-      timeout: 5s
+      test:
+        [
+          'CMD',
+          'curl',
+          '--fail',
+          '--silent',
+          'http://localhost:8000/status/quick',
+        ]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
     networks:
       - llm-network
 
@@ -88,11 +95,20 @@ services:
         reservations:
           memory: 2G
     healthcheck:
-      test: ['CMD', 'curl', '--fail', 'http://localhost:8080/readyz']
+      test:
+        [
+          'CMD',
+          'curl',
+          '--fail',
+          '--silent',
+          '--max-time',
+          '10',
+          'http://localhost:8080/readyz',
+        ]
       interval: 60s
-      timeout: 20s
-      retries: 3
-      start_period: 120s
+      timeout: 15s
+      retries: 2
+      start_period: 180s
     networks:
       - llm-network
 
@@ -107,8 +123,17 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:6333/readyz']
-      interval: 10s
+      test:
+        [
+          'CMD',
+          'curl',
+          '--fail',
+          '--silent',
+          '--max-time',
+          '5',
+          'http://localhost:6333/readyz',
+        ]
+      interval: 15s
       timeout: 5s
       retries: 3
       start_period: 30s
@@ -129,8 +154,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./scripts/postgres-init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U con_selfrag -d con_selfrag']
-      interval: 10s
+      test: ['CMD-SHELL', 'pg_isready -U con_selfrag -d con_selfrag -t 5']
+      interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
@@ -146,8 +171,8 @@ services:
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
+      test: ['CMD', 'redis-cli', '--latency-history', '-i', '1', 'ping']
+      interval: 15s
       timeout: 3s
       retries: 3
       start_period: 10s

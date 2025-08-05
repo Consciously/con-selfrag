@@ -118,22 +118,38 @@ class SelfrageAPIClient:
 @click.option("--api-url", default=None, help="API base URL")
 @click.option("--timeout", default=30.0, help="Request timeout in seconds")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
+@click.option("--debug", is_flag=True, help="Enable debug logging")
 @click.pass_context
-def cli(ctx, api_url: str, timeout: float, verbose: bool):
+def cli(ctx, api_url: str, timeout: float, verbose: bool, debug: bool):
     """
     Selfrag CLI - Personal Knowledge System
     
     A command-line interface for managing your local knowledge system.
     Supports document ingestion, semantic search, and system monitoring.
     """
+    # Configure logging if debug is enabled
+    if debug:
+        import os
+        os.environ["DEBUG_LOGGING"] = "true"
+        os.environ["LOG_LEVEL"] = "DEBUG"
+        
+        # Reconfigure logging
+        from ..logging_utils import reconfigure_logging
+        reconfigure_logging(log_level="DEBUG", debug_logging=True, performance_logging=verbose)
+        
+        console.print("[dim]Debug logging enabled[/dim]")
+    
     # Initialize context
     ctx.ensure_object(dict)
     ctx.obj['api_url'] = api_url
     ctx.obj['timeout'] = timeout
     ctx.obj['verbose'] = verbose
+    ctx.obj['debug'] = debug
     
     if verbose:
         console.print("[dim]Selfrag CLI initialized[/dim]")
+        if debug:
+            console.print("[dim]Debug mode: ON[/dim]")
 
 
 @cli.command()
