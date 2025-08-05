@@ -45,6 +45,11 @@ dependencies = [
     # CLI dependencies
     "click>=8.1.0",     # Command-line interface framework
     "rich>=13.0.0",     # Rich text and beautiful formatting in terminal
+    
+    # gRPC dependencies for future API expansion
+    "grpcio>=1.59.0",        # gRPC core library
+    "grpcio-tools>=1.59.0",  # gRPC protocol buffer compiler tools
+    "protobuf>=4.24.0",      # Protocol buffers
 ]
 
 [project.optional-dependencies]

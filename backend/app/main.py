@@ -1,11 +1,13 @@
 """
 FastAPI application with clean, extensible architecture and structured logging.
 Enhanced with Performance & Caching Layer for optimal throughput and response times.
+Features API versioning, gRPC support, and enhanced error handling.
 """
 
 import time
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 
 from .config import config
 
@@ -13,11 +15,28 @@ from .logging_utils import get_logger, log_request
 from .startup_check import startup_checks
 from .models import ModelInfo
 from .middleware.performance import create_performance_middleware
+from .middleware.error_handling import (
+    ErrorHandlingMiddleware, 
+    create_error_handlers,
+    ValidationErrorHandler
+)
 
 from .database.connection import get_database_pools
 
-# Import route modules
+# Import API versioning
+from .api.v1 import v1_router
+
+# Import legacy route modules for backward compatibility
 from .routes import auth, debug, health, ingest, llm, query, rag, rate_limits
+
+# gRPC server management (optional)
+try:
+    from .grpc.server import start_grpc_server, stop_grpc_server
+    GRPC_AVAILABLE = True
+except ImportError:
+    GRPC_AVAILABLE = False
+    start_grpc_server = None
+    stop_grpc_server = None
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -26,10 +45,14 @@ logger = get_logger(__name__)
 app = FastAPI(
     title="Selfrag LLM API",
     description="""
-    **Selfrag LLM API - High-Performance Modular Backend**
+    **Selfrag LLM API - High-Performance Modular Backend with API Versioning**
 
-    A clean, extensible FastAPI backend for AI-powered applications with integrated LLM capabilities
-    and Performance & Caching Layer for optimal throughput and response times.
+    A clean, extensible FastAPI backend for AI-powered applications with integrated LLM capabilities,
+    Performance & Caching Layer, API versioning, gRPC support, and enhanced error handling.
+
+    ## API Versions
+    - **v1**: Current stable API version (`/v1/*`)
+    - **Legacy**: Backward compatible endpoints (direct paths)
 
     ## Performance Features
     - **Connection Pooling**: Optimized database connections for PostgreSQL, Redis, and Qdrant
@@ -39,54 +62,71 @@ app = FastAPI(
     - **Async Processing**: Non-blocking operations for maximum throughput
 
     ## Core Features
-    - **Health Monitoring**: Service health and readiness checks
+    - **Health Monitoring**: Service health and readiness checks (including gRPC)
     - **Content Ingestion**: Add content with metadata for processing
     - **Natural Language Search**: Query content using semantic search
     - **LLM Integration**: Text generation, question answering, and model management
     - **Streaming Support**: Real-time text generation with streaming responses
     - **Debug Endpoints**: Direct LocalAI testing and inspection tools
 
-    ## LLM Capabilities
-    - **Text Generation**: `/llm/generate` - Generate text using configured models
-    - **Streaming Generation**: `/llm/generate/stream` - Real-time text generation
-    - **Question Answering**: `/llm/ask` - Conversational Q&A interface
-    - **Model Management**: `/llm/models` - List and manage available models
-    - **Health Monitoring**: `/llm/health` - LLM service status checks
+    ## API Endpoints (v1)
+    - **Authentication**: `/v1/auth/*` - User authentication and authorization
+    - **Health**: `/v1/health/*` - Service status and health checks
+    - **Ingestion**: `/v1/ingest/*` - Content ingestion and management
+    - **Query**: `/v1/query/*` - Context-aware semantic search
+    - **LLM**: `/v1/llm/*` - Language model operations
+    - **RAG**: `/v1/rag/*` - Retrieval-Augmented Generation pipeline
+    - **Debug**: `/v1/debug/*` - Development and testing tools
 
-    ## Debug Endpoints (Development)
-    - **Direct Ask**: `/debug/ask` - Test LocalAI question answering directly
-    - **Direct Embed**: `/debug/embed` - Test embedding generation directly
-    - **Direct Generate**: `/debug/generate` - Test text generation directly
-    - **Service Status**: `/debug/status` - Inspect LocalAI configuration and status
+    ## Error Handling
+    - **Structured Errors**: Consistent error response format
+    - **Request Tracking**: Unique request IDs for error correlation
+    - **Context Logging**: Comprehensive error context and stack traces
+    - **Graceful Degradation**: Fallback responses for service failures
 
-    ## Performance Monitoring
-    - **Metrics**: `/health/metrics` - Performance statistics and cache analytics
-    - **Database Health**: `/health/services` - Connection pool status and health checks
+    ## gRPC Support
+    - **High Performance**: Binary protocol for efficient communication
+    - **Health Checks**: gRPC health monitoring at `/health/grpc`
+    - **Future Ready**: Skeleton for Phase 3 implementation
 
     ## Getting Started
     1. Start the service: `uvicorn app.main:app --reload`
     2. Open Swagger UI: http://localhost:8000/docs
-    3. Test endpoints using the interactive documentation
+    3. Test v1 endpoints: http://localhost:8000/v1/
+    4. Legacy endpoints: http://localhost:8000/ (backward compatible)
 
     ## Architecture
-    - **Routes**: HTTP endpoint handlers
-    - **Services**: Business logic layer with caching
-    - **Models**: Pydantic models for validation
+    - **Versioned APIs**: Structured API versioning with `/v1` prefix
+    - **Routes**: HTTP endpoint handlers with comprehensive documentation
+    - **Services**: Business logic layer with caching and performance optimization
+    - **Models**: Pydantic models for validation and serialization
     - **Clients**: Pooled connections (LocalAI, Qdrant, PostgreSQL, Redis)
-    - **Middleware**: Performance optimization and monitoring
+    - **Middleware**: Performance optimization, error handling, and monitoring
+    - **gRPC**: High-performance binary protocol support (skeleton)
     """,
-    version="1.0.0",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# Add performance middleware first (processes requests before CORS)
+# Add error handling middleware first
+app.add_middleware(ErrorHandlingMiddleware)
+
+# Add performance middleware (processes requests before CORS)
 performance_middleware = create_performance_middleware(
     enable_compression=True,
     compression_threshold=1024,
     enable_metrics=True,
     max_request_time=30.0
 )
+
+# Add custom exception handlers
+error_handlers = create_error_handlers()
+for status_code_or_exception, handler in error_handlers.items():
+    app.add_exception_handler(status_code_or_exception, handler)
+
+# Add validation error handler
+app.add_exception_handler(RequestValidationError, ValidationErrorHandler.validation_exception_handler)
 
 # Add CORS middleware for development
 app.add_middleware(
@@ -136,13 +176,15 @@ async def log_requests(request: Request, call_next):
 # Log application startup
 @app.on_event("startup")
 async def startup_event():
-    """Log application startup, initialize database pools, and run service checks."""
-    logger.info("🚀 Selfrag API with Performance & Caching Layer starting up...")
+    """Log application startup, initialize database pools, gRPC server, and run service checks."""
+    logger.info("🚀 Selfrag API v2.0 with Enhanced Features starting up...")
     logger.info(f"Server: {config.host}:{config.port}")
     logger.info(f"LocalAI: {config.localai_base_url}")
     logger.info(f"Default model: {config.default_model}")
     logger.info(f"Log level: {config.log_level}")
     logger.info(f"CORS origins: {config.cors_origins}")
+    logger.info(f"API versioning: Enabled (v1 + legacy)")
+    logger.info(f"gRPC support: {'Enabled' if GRPC_AVAILABLE else 'Disabled (Phase 3)'}")
     
     # Initialize database connection pools
     logger.info("Initializing database connection pools...")
@@ -153,6 +195,16 @@ async def startup_event():
     except Exception as e:
         logger.error("❌ Failed to initialize database pools", extra={"error": str(e)}, exc_info=True)
         logger.warning("API starting anyway - some features may be limited")
+    
+    # Start gRPC server if available
+    if GRPC_AVAILABLE and start_grpc_server:
+        try:
+            logger.info("Starting gRPC server...")
+            await start_grpc_server(port=50051)
+            logger.info("✅ gRPC server started on port 50051")
+        except Exception as e:
+            logger.error("❌ Failed to start gRPC server", extra={"error": str(e)}, exc_info=True)
+            logger.warning("Continuing without gRPC - HTTP API still available")
     
     # Run comprehensive service checks
     logger.info("Running startup service checks...")
@@ -191,7 +243,16 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Log application shutdown and cleanup resources."""
-    logger.info("🛑 Selfrag API shutting down...")
+    logger.info("🛑 Selfrag API v2.0 shutting down...")
+    
+    # Stop gRPC server if running
+    if GRPC_AVAILABLE and stop_grpc_server:
+        try:
+            logger.info("Stopping gRPC server...")
+            await stop_grpc_server()
+            logger.info("✅ gRPC server stopped successfully")
+        except Exception as e:
+            logger.error("❌ Error stopping gRPC server", extra={"error": str(e)}, exc_info=True)
     
     # Cleanup database connection pools
     try:
@@ -202,33 +263,59 @@ async def shutdown_event():
     
     logger.info("Graceful shutdown completed")
 
-# Include modular routes
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(debug.router, prefix="/debug", tags=["Debug"])
-app.include_router(health.router, prefix="/health", tags=["Health"])
-app.include_router(ingest.router, prefix="/ingest", tags=["Ingestion"])
-app.include_router(llm.router, prefix="/llm", tags=["LLM"])
-app.include_router(query.router, prefix="/query", tags=["Query"])
-app.include_router(rag.router, prefix="/rag", tags=["RAG Pipeline"])
-app.include_router(rate_limits.router, tags=["Rate Limiting"])
+# Include versioned API routes
+app.include_router(v1_router, tags=["API v1"])
+
+# Include legacy routes for backward compatibility  
+app.include_router(auth.router, prefix="/auth", tags=["Authentication (Legacy)"])
+app.include_router(debug.router, prefix="/debug", tags=["Debug (Legacy)"])
+app.include_router(health.router, prefix="/health", tags=["Health (Legacy)"])
+app.include_router(ingest.router, prefix="/ingest", tags=["Ingestion (Legacy)"])
+app.include_router(llm.router, prefix="/llm", tags=["LLM (Legacy)"])
+app.include_router(query.router, prefix="/query", tags=["Query (Legacy)"])
+app.include_router(rag.router, prefix="/rag", tags=["RAG Pipeline (Legacy)"])
+app.include_router(rate_limits.router, tags=["Rate Limiting (Legacy)"])
 
 
 @app.get("/")
 async def root():
-    """Root endpoint with basic API information."""
+    """Root endpoint with API version information and available endpoints."""
     logger.info("Root endpoint accessed")
     return {
-        "name": "Selfrag API",
-        "version": "1.0.0",
-        "description": "Modular FastAPI backend for AI applications",
+        "name": "Selfrag LLM API",
+        "version": "2.0.0",
+        "description": "Modular FastAPI backend for AI applications with API versioning",
+        "api_versions": {
+            "v1": "/v1/",
+            "legacy": "/ (backward compatible)"
+        },
+        "features": [
+            "API Versioning",
+            "Enhanced Error Handling", 
+            "gRPC Support (skeleton)",
+            "Context-Aware RAG",
+            "Performance Optimization",
+            "Comprehensive Health Checks"
+        ],
         "endpoints": {
-            "debug": "/debug",
-            "health": "/health",
-            "ingest": "/ingest",
-            "llm": "/llm",
-            "query": "/query",
-            "docs": "/docs",
-            "models": "/models",
+            "v1_api": "/v1/",
+            "legacy": {
+                "debug": "/debug",
+                "health": "/health", 
+                "ingest": "/ingest",
+                "llm": "/llm",
+                "query": "/query",
+                "auth": "/auth"
+            },
+            "documentation": {
+                "swagger": "/docs",
+                "redoc": "/redoc"
+            },
+            "grpc": {
+                "enabled": GRPC_AVAILABLE,
+                "port": 50051 if GRPC_AVAILABLE else None,
+                "health_check": "/health/grpc"
+            }
         },
     }
 

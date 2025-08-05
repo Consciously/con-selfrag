@@ -12,6 +12,18 @@ from ..database.connection import get_database_pools
 from ..logging_utils import get_logger
 from ..startup_check import service_checker
 
+# Import gRPC health check function
+try:
+    from ..grpc.server import get_grpc_health_status
+except ImportError:
+    # Fallback for when gRPC is not available
+    async def get_grpc_health_status():
+        return {
+            "status": "unavailable",
+            "port": None,
+            "message": "gRPC server not configured"
+        }
+
 router = APIRouter(tags=["Health"])
 logger = get_logger(__name__)
 
@@ -102,11 +114,21 @@ async def health():
 
 @router.get("/services")
 async def services_detailed():
-    """Detailed service status with comprehensive information."""
+    """Detailed service status with comprehensive information including gRPC."""
     logger.debug("Detailed services check accessed")
     
     try:
+        # Get standard service results
         results = await service_checker.check_all_services()
+        
+        # Add gRPC health status
+        grpc_status = await get_grpc_health_status()
+        results["services"]["grpc"] = grpc_status
+        
+        # Update overall status if gRPC is unhealthy
+        if grpc_status["status"] != "healthy" and results["overall_status"] == "healthy":
+            results["overall_status"] = "degraded"
+        
         return {
             "overall_status": results["overall_status"],
             "services": results["services"],
@@ -155,6 +177,39 @@ async def test_postgres_write():
             status_code=500,
             detail={
                 "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+        )
+
+
+@router.get("/grpc")
+async def grpc_health():
+    """Check gRPC server health status."""
+    logger.debug("gRPC health check accessed")
+    
+    try:
+        grpc_status = await get_grpc_health_status()
+        
+        if grpc_status["status"] == "healthy":
+            return {
+                "status": "healthy",
+                "grpc": grpc_status,
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+        else:
+            return {
+                "status": "unhealthy",
+                "grpc": grpc_status,
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            
+    except Exception as e:
+        logger.error("gRPC health check failed", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
