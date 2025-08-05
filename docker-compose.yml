@@ -171,7 +171,7 @@ services:
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', '--latency-history', '-i', '1', 'ping']
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 15s
       timeout: 3s
       retries: 3
