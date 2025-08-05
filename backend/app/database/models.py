@@ -6,9 +6,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, Index
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, Index, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import DeclarativeBase, relationship
 
 
 class Base(DeclarativeBase):
@@ -69,6 +69,35 @@ class UserSession(Base):
         }
 
 
+class MemoryLog(Base):
+    """Memory logs for storing user interactions and system events."""
+
+    __tablename__ = "memory_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    type = Column(String(50), nullable=False)
+    content = Column(Text, nullable=False)
+    meta_data = Column(JSONB, nullable=True)  # Renamed from 'metadata' to avoid SQLAlchemy conflict
+
+    user = relationship("User", back_populates="memory_logs")
+
+    __table_args__ = (
+        Index('ix_memory_logs_timestamp', 'timestamp'),
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": str(self.id),
+            "user_id": str(self.user_id),
+            "timestamp": self.timestamp.isoformat(),
+            "type": self.type,
+            "content": self.content,
+            "metadata": self.meta_data,  # Return as 'metadata' in the API for consistency
+        }
+
+
 class User(Base):
     """User authentication table."""
 
@@ -85,6 +114,8 @@ class User(Base):
     # Fields to be added in migration
     is_admin = Column(Boolean, default=False)
     last_login = Column(DateTime, nullable=True)
+    
+    memory_logs = relationship("MemoryLog", back_populates="user")
     
     # Add composite index for common queries
     __table_args__ = (
