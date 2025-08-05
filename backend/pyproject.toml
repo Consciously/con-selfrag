@@ -15,41 +15,36 @@ dependencies = [
     "uvicorn",
     "pydantic>=2.0.0",
     "loguru>=0.7.0",
-    
     # HTTP client dependencies
-    "openai>=1.0.0",  # OpenAI client for LocalAI compatibility
-    "httpx>=0.25.0",  # Async HTTP client
-    "requests>=2.31.0",  # HTTP requests for tests and utilities
-    
+    "openai>=1.0.0", # OpenAI client for LocalAI compatibility
+    "httpx>=0.25.0", # Async HTTP client
+    "requests>=2.31.0", # HTTP requests for tests and utilities
     # Authentication dependencies
-    "PyJWT>=2.8.0",          # JSON Web Token implementation
+    "PyJWT>=2.8.0", # JSON Web Token implementation
     "passlib[bcrypt]>=1.7.4", # Password hashing library with bcrypt
     "python-multipart>=0.0.6", # Form data parsing for login endpoints
-    "email-validator>=2.0.0",  # Email validation for user registration
-    
+    "email-validator>=2.0.0", # Email validation for user registration
     # Database dependencies for authentication and data storage
     "sqlalchemy",
-    "alembic",       # Database migrations
-    
+    "alembic", # Database migrations
     # Math and ML dependencies (install early to avoid conflicts)
-    "numpy>=1.24.0",  # Required for embeddings and vector operations
-    
+    "numpy>=1.24.0", # Required for embeddings and vector operations
     # Database dependencies for RAG pipeline
-    "asyncpg>=0.29.0",        # PostgreSQL async driver
-    "redis[hiredis]>=5.0.0",  # Redis async client with hiredis for performance
-    "qdrant-client>=1.7.0",   # Qdrant vector database client
-    
+    "asyncpg>=0.29.0", # PostgreSQL async driver
+    "redis[hiredis]>=5.0.0", # Redis async client with hiredis for performance
+    "qdrant-client>=1.7.0", # Qdrant vector database client
     # RAG pipeline dependencies (install after numpy)
-    "sentence-transformers>=2.2.0",  # For embeddings generation
-    
+    "sentence-transformers>=2.2.0", # For embeddings generation
     # CLI dependencies
-    "click>=8.1.0",     # Command-line interface framework
-    "rich>=13.0.0",     # Rich text and beautiful formatting in terminal
-    
+    "click>=8.1.0", # Command-line interface framework
+    "rich>=13.0.0", # Rich text and beautiful formatting in terminal
     # gRPC dependencies for future API expansion
-    "grpcio>=1.59.0",        # gRPC core library
-    "grpcio-tools>=1.59.0",  # gRPC protocol buffer compiler tools
-    "protobuf>=4.24.0",      # Protocol buffers
+    "grpcio>=1.59.0", # gRPC core library
+    "grpcio-tools>=1.59.0", # gRPC protocol buffer compiler tools
+    "protobuf>=4.24.0", # Protocol buffers
+    # System monitoring dependencies
+    "psutil>=5.9.0", # System and process utilities for metrics
+    "prometheus-fastapi-instrumentator>=6.1.0", # Prometheus metrics for FastAPI
 ]
 
 [project.optional-dependencies]

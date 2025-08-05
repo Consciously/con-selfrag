@@ -28,6 +28,8 @@ class Config(BaseModel):
 
     # Logging
     log_level: str = Field(default="INFO", description="Logging level")
+    debug_logging: bool = Field(default=False, description="Enable verbose debug logging")
+    performance_logging: bool = Field(default=False, description="Enable performance metric logging")
 
     # Database settings (now active for RAG pipeline)
     postgres_url: str = Field(default="", description="PostgreSQL connection URL")
@@ -88,6 +90,8 @@ def load_config() -> Config:
         localai_timeout=float(os.getenv("LOCALAI_TIMEOUT", "30.0")),
         default_model=os.getenv("DEFAULT_MODEL", "llama-3.2-1b-instruct"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
+        debug_logging=os.getenv("DEBUG_LOGGING", "false").lower() == "true",
+        performance_logging=os.getenv("PERFORMANCE_LOGGING", "false").lower() == "true",
         # Database settings
         postgres_url=os.getenv("POSTGRES_URL", ""),
         qdrant_host=os.getenv("QDRANT_HOST", "localhost"),

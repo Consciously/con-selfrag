@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 
 from .config import config
 
-from .logging_utils import get_logger, log_request
+from .logging_utils import get_logger, log_request, reconfigure_logging
 from .startup_check import startup_checks
 from .models import ModelInfo
 from .middleware.performance import create_performance_middleware
@@ -20,6 +20,7 @@ from .middleware.error_handling import (
     create_error_handlers,
     ValidationErrorHandler
 )
+from .middleware.metrics import create_metrics_middleware
 
 from .database.connection import get_database_pools
 
@@ -27,7 +28,7 @@ from .database.connection import get_database_pools
 from .api.v1 import v1_router
 
 # Import legacy route modules for backward compatibility
-from .routes import auth, debug, health, ingest, llm, query, rag, rate_limits
+from .routes import auth, debug, health, ingest, llm, query, rag, rate_limits, status
 
 # gRPC server management (optional)
 try:
@@ -112,6 +113,10 @@ app = FastAPI(
 # Add error handling middleware first
 app.add_middleware(ErrorHandlingMiddleware)
 
+# Add metrics middleware for monitoring (before performance middleware)
+metrics_middleware = create_metrics_middleware(enable_metrics=True)
+app.add_middleware(metrics_middleware)
+
 # Add performance middleware (processes requests before CORS)
 performance_middleware = create_performance_middleware(
     enable_compression=True,
@@ -177,11 +182,20 @@ async def log_requests(request: Request, call_next):
 @app.on_event("startup")
 async def startup_event():
     """Log application startup, initialize database pools, gRPC server, and run service checks."""
+    # Reconfigure logging with config settings
+    reconfigure_logging(
+        log_level=config.log_level,
+        debug_logging=config.debug_logging,
+        performance_logging=config.performance_logging
+    )
+    
     logger.info("🚀 Selfrag API v2.0 with Enhanced Features starting up...")
     logger.info(f"Server: {config.host}:{config.port}")
     logger.info(f"LocalAI: {config.localai_base_url}")
     logger.info(f"Default model: {config.default_model}")
     logger.info(f"Log level: {config.log_level}")
+    logger.info(f"Debug logging: {config.debug_logging}")
+    logger.info(f"Performance logging: {config.performance_logging}")
     logger.info(f"CORS origins: {config.cors_origins}")
     logger.info(f"API versioning: Enabled (v1 + legacy)")
     logger.info(f"gRPC support: {'Enabled' if GRPC_AVAILABLE else 'Disabled (Phase 3)'}")
@@ -275,6 +289,7 @@ app.include_router(llm.router, prefix="/llm", tags=["LLM (Legacy)"])
 app.include_router(query.router, prefix="/query", tags=["Query (Legacy)"])
 app.include_router(rag.router, prefix="/rag", tags=["RAG Pipeline (Legacy)"])
 app.include_router(rate_limits.router, tags=["Rate Limiting (Legacy)"])
+app.include_router(status.router, prefix="/status", tags=["System Status"])
 
 
 @app.get("/")
@@ -302,6 +317,7 @@ async def root():
             "legacy": {
                 "debug": "/debug",
                 "health": "/health", 
+                "status": "/status",
                 "ingest": "/ingest",
                 "llm": "/llm",
                 "query": "/query",
