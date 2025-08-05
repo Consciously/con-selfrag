@@ -69,7 +69,7 @@ class SelfrageAPIClient:
             return {"status": "error", "error": str(e)}
     
     async def query(self, query_text: str, limit: int = 10) -> Dict[str, Any]:
-        """Query the knowledge base."""
+        """Query the knowledge base with basic parameters."""
         try:
             payload = {
                 "query": query_text,
@@ -78,7 +78,33 @@ class SelfrageAPIClient:
             
             response = await self.client.post(f"{self.base_url}/query", json=payload)
             response.raise_for_status()
-            return response.json()
+            return {"status": "success", "data": response.json()}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+    
+    async def query_advanced(
+        self, 
+        query: str, 
+        limit: int = 10, 
+        filters: Dict[str, Any] = None,
+        context: str = None,
+        session_id: str = None,
+        enable_reranking: bool = True
+    ) -> Dict[str, Any]:
+        """Query the knowledge base with context-aware features."""
+        try:
+            payload = {
+                "query": query,
+                "limit": limit,
+                "filters": filters,
+                "context": context,
+                "session_id": session_id,
+                "enable_reranking": enable_reranking
+            }
+            
+            response = await self.client.post(f"{self.base_url}/query", json=payload)
+            response.raise_for_status()
+            return {"status": "success", "data": response.json()}
         except Exception as e:
             return {"status": "error", "error": str(e)}
     
@@ -247,24 +273,45 @@ def ingest(ctx, file_paths: tuple, title: str, tags: str, doc_type: str, source:
 @click.option("--format", "output_format", default="table", 
               type=click.Choice(["table", "json", "simple"]), help="Output format")
 @click.option("--threshold", default=0.5, help="Minimum similarity score")
+@click.option("--context", "-c", default=None, help="Conversation context for enhanced search")
+@click.option("--session-id", default=None, help="Session ID for context tracking")
+@click.option("--disable-reranking", is_flag=True, help="Disable context-aware re-ranking")
 @click.pass_context
-def query(ctx, query_text: str, limit: int, output_format: str, threshold: float):
+def query(ctx, query_text: str, limit: int, output_format: str, threshold: float, 
+          context: str, session_id: str, disable_reranking: bool):
     """
-    Query the knowledge base using semantic search.
+    Query the knowledge base using context-aware semantic search.
     
-    Searches through ingested documents using vector similarity.
-    Returns relevant chunks with similarity scores and metadata.
+    Searches through ingested documents using vector similarity with optional
+    context-aware re-ranking for improved relevance.
     
     Examples:
         selfrag query "machine learning algorithms"
-        selfrag query "API documentation" --limit 5 --format json
+        selfrag query "best practices" --context "We discussed API development"
+        selfrag query "which is better?" --context "Comparing Django vs FastAPI" --session-id chat_123
+        selfrag query "API documentation" --limit 5 --format json --disable-reranking
     """
     
     async def search_knowledge():
         client = SelfrageAPIClient(ctx.obj['api_url'], ctx.obj['timeout'])
         
+        search_params = {
+            "query": query_text,
+            "limit": limit,
+            "filters": None,
+            "context": context,
+            "session_id": session_id,
+            "enable_reranking": not disable_reranking
+        }
+        
+        # Show search context if provided
+        if context:
+            console.print(f"🧠 [dim]Context: {context[:80]}{'...' if len(context) > 80 else ''}[/dim]")
+        if session_id:
+            console.print(f"🔗 [dim]Session: {session_id}[/dim]")
+        
         with console.status(f"[bold blue]Searching for: {query_text}..."):
-            result = await client.query(query_text, limit)
+            result = await client.query_advanced(**search_params)
         
         await client.close()
         
@@ -272,51 +319,118 @@ def query(ctx, query_text: str, limit: int, output_format: str, threshold: float
             console.print(f"❌ Query failed: {result.get('error')}")
             return
         
-        results = result.get("results", [])
+        # Extract response data
+        query_response = result.get("data", {})
+        results = query_response.get("results", [])
+        query_time_ms = query_response.get("query_time_ms", 0)
+        reranked = query_response.get("reranked", False)
+        context_used = query_response.get("context_used", False)
+        
         if not results:
             console.print("🔍 No results found")
             return
         
-        # Filter by threshold
-        filtered_results = [r for r in results if r.get("score", 0) >= threshold]
+        # Filter by threshold (using final_score if available, otherwise relevance_score)
+        filtered_results = []
+        for r in results:
+            score = r.get("final_score", r.get("relevance_score", 0))
+            if score >= threshold:
+                filtered_results.append(r)
         
         if not filtered_results:
             console.print(f"🔍 No results above similarity threshold {threshold}")
             return
         
+        # Display search metadata
+        metadata_info = []
+        if query_time_ms:
+            metadata_info.append(f"⏱️  {query_time_ms}ms")
+        if context_used:
+            metadata_info.append("🧠 Context-aware")
+        if reranked:
+            metadata_info.append("🔄 Re-ranked")
+        
+        if metadata_info:
+            console.print(f"[dim]{' | '.join(metadata_info)}[/dim]")
+        
         if output_format == "json":
-            console.print(json.dumps(filtered_results, indent=2))
+            # Enhanced JSON output with all scoring details
+            enhanced_output = {
+                "query": query_text,
+                "context": context,
+                "metadata": {
+                    "total_results": len(filtered_results),
+                    "query_time_ms": query_time_ms,
+                    "reranked": reranked,
+                    "context_used": context_used,
+                    "session_id": session_id
+                },
+                "results": filtered_results
+            }
+            console.print(json.dumps(enhanced_output, indent=2))
         elif output_format == "simple":
             for i, result in enumerate(filtered_results, 1):
-                score = result.get("score", 0)
+                relevance_score = result.get("relevance_score", 0)
+                final_score = result.get("final_score", relevance_score)
+                context_score = result.get("context_score")
                 content = result.get("content", "")[:200] + "..."
-                console.print(f"{i}. [yellow]Score: {score:.3f}[/yellow]")
+                
+                score_info = f"Final: {final_score:.3f}"
+                if context_score is not None:
+                    score_info += f" (Base: {relevance_score:.3f}, Context: {context_score:.3f})"
+                else:
+                    score_info = f"Score: {relevance_score:.3f}"
+                
+                console.print(f"{i}. [yellow]{score_info}[/yellow]")
                 console.print(f"   {content}\n")
-        else:  # table format
-            table = Table(title=f"Search Results for: {query_text}")
+        else:  # enhanced table format
+            table = Table(title=f"Context-Aware Search Results for: {query_text}")
             table.add_column("Rank", width=4)
-            table.add_column("Score", width=8)
+            table.add_column("Final Score", width=10)
+            if any(r.get("context_score") is not None for r in filtered_results):
+                table.add_column("Base", width=6)
+                table.add_column("Context", width=7)
             table.add_column("Content", min_width=40)
             table.add_column("Source", width=20)
             
             for i, result in enumerate(filtered_results, 1):
-                score = result.get("score", 0)
+                relevance_score = result.get("relevance_score", 0)
+                final_score = result.get("final_score", relevance_score)
+                context_score = result.get("context_score")
                 content = result.get("content", "")
                 metadata = result.get("metadata", {})
                 source = metadata.get("source", "unknown")
                 
                 # Truncate content for table display
-                display_content = content[:100] + "..." if len(content) > 100 else content
+                display_content = content[:80] + "..." if len(content) > 80 else content
                 
-                table.add_row(
-                    str(i),
-                    f"{score:.3f}",
-                    display_content,
-                    source
-                )
+                # Build row data based on whether context scores are present
+                row_data = [str(i), f"{final_score:.3f}"]
+                
+                if any(r.get("context_score") is not None for r in filtered_results):
+                    row_data.extend([
+                        f"{relevance_score:.3f}",
+                        f"{context_score:.3f}" if context_score is not None else "N/A"
+                    ])
+                
+                row_data.extend([display_content, source])
+                table.add_row(*row_data)
             
             console.print(table)
-            console.print(f"\n📊 Found {len(filtered_results)} results (threshold: {threshold})")
+            
+            # Enhanced results summary
+            summary_parts = [f"📊 Found {len(filtered_results)} results"]
+            if reranked:
+                avg_improvement = sum(
+                    r.get("final_score", 0) - r.get("relevance_score", 0) 
+                    for r in filtered_results if r.get("context_score") is not None
+                ) / len([r for r in filtered_results if r.get("context_score") is not None])
+                
+                if avg_improvement != 0:
+                    summary_parts.append(f"📈 Avg re-ranking improvement: {avg_improvement:+.3f}")
+            
+            summary_parts.append(f"⚡ Threshold: {threshold}")
+            console.print(f"\n{' | '.join(summary_parts)}")
     
     asyncio.run(search_knowledge())
 

@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package selfrag.v1;
+
+// Health check service
+service Health {
+    rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Query service for semantic search
+service Query {
+    rpc QueryContent(QueryRequest) returns (QueryResponse);
+}
+
+// Ingestion service for content management
+service Ingest {
+    rpc IngestContent(IngestRequest) returns (IngestResponse);
+}
+
+// Health check messages
+message HealthCheckRequest {
+    string service = 1;
+}
+
+message HealthCheckResponse {
+    enum ServingStatus {
+        UNKNOWN = 0;
+        SERVING = 1;
+        NOT_SERVING = 2;
+        SERVICE_UNKNOWN = 3;
+    }
+    ServingStatus status = 1;
+    string message = 2;
+}
+
+// Query messages
+message QueryRequest {
+    string query = 1;
+    int32 limit = 2;
+    map<string, string> filters = 3;
+    string context = 4;
+    string session_id = 5;
+    bool enable_reranking = 6;
+}
+
+message QueryResult {
+    string id = 1;
+    string content = 2;
+    float relevance_score = 3;
+    float context_score = 4;
+    float final_score = 5;
+    map<string, string> metadata = 6;
+}
+
+message QueryResponse {
+    string query = 1;
+    string context = 2;
+    repeated QueryResult results = 3;
+    int32 total_results = 4;
+    int32 query_time_ms = 5;
+    bool reranked = 6;
+    bool context_used = 7;
+}
+
+// Ingestion messages
+message IngestRequest {
+    string content = 1;
+    map<string, string> metadata = 2;
+}
+
+message IngestResponse {
+    string id = 1;
+    string status = 2;
+    string message = 3;
+}

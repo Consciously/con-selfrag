@@ -42,11 +42,19 @@ class CacheKey:
         return f"emb:{model}:{text_hash}"
     
     @staticmethod
-    def query_result(query: str, filters: Optional[Dict] = None, limit: int = 10) -> str:
-        """Generate cache key for query results."""
+    def query_result(
+        query: str, 
+        filters: Optional[Dict] = None, 
+        limit: int = 10, 
+        context_key: Optional[str] = None
+    ) -> str:
+        """Generate cache key for query results with optional context awareness."""
         query_hash = hashlib.sha256(query.encode()).hexdigest()[:16]
         filters_hash = hashlib.sha256(str(sorted((filters or {}).items())).encode()).hexdigest()[:8]
-        return f"query:{query_hash}:{filters_hash}:{limit}"
+        context_hash = ""
+        if context_key:
+            context_hash = f":{hashlib.sha256(context_key.encode()).hexdigest()[:8]}"
+        return f"query:{query_hash}:{filters_hash}:{limit}{context_hash}"
     
     @staticmethod
     def document_chunks(document_id: str) -> str:
@@ -363,15 +371,27 @@ async def cache_embedding(text: str, embedding: List[float], model: str = "defau
     await cache_service.set(key, embedding, ttl_seconds=cache_service.config.l2_ttl_seconds)
 
 
-async def get_cached_query_result(query: str, filters: Optional[Dict] = None, limit: int = 10) -> Optional[Any]:
-    """Get cached query result."""
-    key = CacheKey.query_result(query, filters, limit)
+async def get_cached_query_result(
+    query: str, 
+    filters: Optional[Dict] = None, 
+    limit: int = 10, 
+    context_key: Optional[str] = None
+) -> Optional[Any]:
+    """Get cached query result with optional context awareness."""
+    key = CacheKey.query_result(query, filters, limit, context_key)
     return await cache_service.get(key)
 
 
-async def cache_query_result(query: str, result: Any, filters: Optional[Dict] = None, limit: int = 10, ttl_seconds: int = 3600):
-    """Cache query result."""
-    key = CacheKey.query_result(query, filters, limit)
+async def cache_query_result(
+    query: str, 
+    result: Any, 
+    filters: Optional[Dict] = None, 
+    limit: int = 10, 
+    ttl_seconds: int = 3600,
+    context_key: Optional[str] = None
+):
+    """Cache query result with optional context awareness."""
+    key = CacheKey.query_result(query, filters, limit, context_key)
     await cache_service.set(key, result, ttl_seconds)
 
 

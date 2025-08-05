@@ -1,7 +1,7 @@
 # con-selfrag Development Makefile
 # Docker-first development workflow commands
 
-.PHONY: help dev up down lint format test clean build logs shell
+.PHONY: help dev up down lint format test clean build logs shell grpc-compile
 
 # Default target
 help:
@@ -9,22 +9,25 @@ help:
 	@echo "==============================="
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev      - Start development environment"
-	@echo "  make up       - Start all services"
-	@echo "  make down     - Stop all services"
-	@echo "  make restart  - Restart all services"
+	@echo "  make dev        - Start development environment"
+	@echo "  make up         - Start all services"
+	@echo "  make down       - Stop all services"
+	@echo "  make restart    - Restart all services"
 	@echo ""
 	@echo "Code Quality:"
-	@echo "  make lint     - Run all code quality checks"
-	@echo "  make format   - Auto-format code"
-	@echo "  make test     - Run all tests"
-	@echo "  make check    - Run lint + test"
+	@echo "  make lint       - Run all code quality checks"
+	@echo "  make format     - Auto-format code"
+	@echo "  make test       - Run all tests"
+	@echo "  make check      - Run lint + test"
+	@echo ""
+	@echo "API Development:"
+	@echo "  make grpc-compile - Compile gRPC protocol buffers"
 	@echo ""
 	@echo "Utility:"
-	@echo "  make logs     - Show logs for all services"
-	@echo "  make build    - Rebuild all images"
-	@echo "  make clean    - Clean up containers and volumes"
-	@echo "  make shell    - Open shell in dev container"
+	@echo "  make logs       - Show logs for all services"
+	@echo "  make build      - Rebuild all images"
+	@echo "  make clean      - Clean up containers and volumes"
+	@echo "  make shell      - Open shell in dev container"
 	@echo ""
 
 # Development environment
@@ -124,5 +127,11 @@ health:
 	@echo "Checking service health..."
 	@curl -f http://localhost:8080/health && echo "✓ API healthy" || echo "✗ API unhealthy"
 	@curl -f http://localhost:6333/health && echo "✓ Qdrant healthy" || echo "✗ Qdrant unhealthy"
+
+# gRPC compilation
+grpc-compile:
+	@echo "Compiling gRPC protocol buffers..."
+	cd backend && ./compile_grpc.sh
+	@echo "✓ gRPC compilation complete"
 	@curl -f http://localhost:5432 && echo "✓ PostgreSQL healthy" || echo "✗ PostgreSQL unhealthy"
 	@redis-cli -h localhost ping && echo "✓ Redis healthy" || echo "✗ Redis unhealthy"

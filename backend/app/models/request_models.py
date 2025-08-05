@@ -109,7 +109,7 @@ class IngestRequest(BaseModel):
 
 
 class QueryRequest(BaseModel):
-    """Request for querying ingested data."""
+    """Request for querying ingested data with context-aware capabilities."""
 
     query: str = Field(
         ...,
@@ -130,3 +130,32 @@ class QueryRequest(BaseModel):
         description="Optional filters to apply to the search",
         json_schema_extra={"example": {"source": "user_input", "tags": ["python"]}},
     )
+    context: str | None = Field(
+        default=None,
+        description="Optional conversation or session context to enhance search relevance",
+        json_schema_extra={
+            "example": "We were discussing Python web development and API frameworks"
+        },
+    )
+    session_id: str | None = Field(
+        default=None,
+        description="Optional session ID for context-aware search tracking",
+        json_schema_extra={"example": "session_12345"},
+    )
+    enable_reranking: bool = Field(
+        default=True,
+        description="Enable advanced re-ranking based on context and relevance",
+        json_schema_extra={"example": True},
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query": "What are the best practices for API development?",
+                "limit": 10,
+                "filters": {"tags": ["api", "python"]},
+                "context": "Previous discussion about FastAPI and performance optimization",
+                "session_id": "session_12345",
+                "enable_reranking": True,
+            }
+        }

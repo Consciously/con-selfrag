@@ -7,7 +7,7 @@ Each model includes comprehensive OpenAPI documentation and examples.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -256,7 +256,7 @@ class IngestResponse(BaseModel):
 
 
 class QueryResult(BaseModel):
-    """Individual query result item."""
+    """Individual query result item with enhanced context-aware scoring."""
 
     id: str = Field(
         ...,
@@ -272,8 +272,18 @@ class QueryResult(BaseModel):
     )
     relevance_score: float = Field(
         ...,
-        description="Relevance score between 0.0 and 1.0",
+        description="Base relevance score between 0.0 and 1.0",
         json_schema_extra={"example": 0.95},
+    )
+    context_score: float | None = Field(
+        None,
+        description="Context-aware relevance score (if context provided)",
+        json_schema_extra={"example": 0.88},
+    )
+    final_score: float = Field(
+        ...,
+        description="Final computed score after re-ranking",
+        json_schema_extra={"example": 0.91},
     )
     metadata: dict[str, Any] | None = Field(
         None,
@@ -283,16 +293,21 @@ class QueryResult(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    """Response for query results."""
+    """Response for query results with context-aware enhancements."""
 
     query: str = Field(
         ...,
         description="Original query string",
         json_schema_extra={"example": "What web frameworks are mentioned?"},
     )
+    context: str | None = Field(
+        None,
+        description="Context used for enhanced search",
+        json_schema_extra={"example": "Previous discussion about Python frameworks"},
+    )
     results: list[QueryResult] = Field(
         ...,
-        description="List of relevant results sorted by relevance",
+        description="List of relevant results sorted by final relevance score",
     )
     total_results: int = Field(
         ...,
@@ -304,20 +319,114 @@ class QueryResponse(BaseModel):
         description="Query processing time in milliseconds",
         json_schema_extra={"example": 150},
     )
+    reranked: bool = Field(
+        default=False,
+        description="Whether results were re-ranked using context",
+        json_schema_extra={"example": True},
+    )
+    context_used: bool = Field(
+        default=False,
+        description="Whether context was applied during search",
+        json_schema_extra={"example": True},
+    )
 
     class Config:
         json_schema_extra = {
             "example": {
                 "query": "What web frameworks are mentioned?",
+                "context": "Previous discussion about Python web development",
                 "results": [
                     {
                         "id": "doc_12345",
                         "content": "FastAPI is a modern, fast web framework for building APIs with Python 3.7+",
                         "relevance_score": 0.95,
+                        "context_score": 0.88,
+                        "final_score": 0.91,
                         "metadata": {"tags": ["api", "python"]},
                     }
                 ],
                 "total_results": 1,
                 "query_time_ms": 150,
+                "reranked": True,
+                "context_used": True,
+            }
+        }
+
+
+class ErrorResponse(BaseModel):
+    """Standardized error response model for all API errors."""
+    
+    error: str = Field(
+        ...,
+        description="Error type identifier",
+        json_schema_extra={"example": "VALIDATION_ERROR"}
+    )
+    message: str = Field(
+        ...,
+        description="Human-readable error message",
+        json_schema_extra={"example": "Request validation failed"}
+    )
+    status_code: int = Field(
+        ...,
+        description="HTTP status code",
+        json_schema_extra={"example": 422}
+    )
+    request_id: Optional[str] = Field(
+        None,
+        description="Unique request identifier for tracking",
+        json_schema_extra={"example": "req_12345"}
+    )
+    timestamp: float = Field(
+        ...,
+        description="Error timestamp in Unix epoch format",
+        json_schema_extra={"example": 1699123456.789}
+    )
+    path: Optional[str] = Field(
+        None,
+        description="Request path where error occurred",
+        json_schema_extra={"example": "/v1/query"}
+    )
+    method: Optional[str] = Field(
+        None,
+        description="HTTP method used",
+        json_schema_extra={"example": "POST"}
+    )
+    details: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Additional error details and context",
+        json_schema_extra={
+            "example": {
+                "validation_errors": [
+                    {
+                        "field": "query",
+                        "message": "field required",
+                        "type": "value_error.missing"
+                    }
+                ],
+                "total_errors": 1
+            }
+        }
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "error": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "status_code": 422,
+                "request_id": "req_12345",
+                "timestamp": 1699123456.789,
+                "path": "/v1/query",
+                "method": "POST",
+                "details": {
+                    "validation_errors": [
+                        {
+                            "field": "query",
+                            "message": "field required",
+                            "type": "value_error.missing"
+                        }
+                    ],
+                    "total_errors": 1
+                }
             }
         }
