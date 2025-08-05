@@ -11,8 +11,8 @@ requires-python = ">=3.11"
 # Minimal essential dependencies following YAGNI principles
 dependencies = [
     # Core web framework dependencies
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
+    "fastapi",
+    "uvicorn",
     "pydantic>=2.0.0",
     "loguru>=0.7.0",
     
@@ -28,8 +28,8 @@ dependencies = [
     "email-validator>=2.0.0",  # Email validation for user registration
     
     # Database dependencies for authentication and data storage
-    "sqlalchemy>=2.0.0",     # ORM for database operations
-    "alembic>=1.12.0",       # Database migrations
+    "sqlalchemy",
+    "alembic",       # Database migrations
     
     # Math and ML dependencies (install early to avoid conflicts)
     "numpy>=1.24.0",  # Required for embeddings and vector operations

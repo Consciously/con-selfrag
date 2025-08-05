@@ -30,6 +30,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Copy application code
 COPY app/ ./app/
 COPY test_*.py ./
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
 
 # Development stage complete - includes all dev tools
 
@@ -53,6 +55,8 @@ COPY --from=dev /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.1
 COPY --from=dev /usr/local/bin /usr/local/bin
 COPY --chown=llmuser:llmuser pyproject.toml README.md ./
 COPY --chown=llmuser:llmuser app/ ./app/
+COPY --chown=llmuser:llmuser alembic.ini ./
+COPY --chown=llmuser:llmuser migrations/ ./migrations/
 
 # Create cache directory for sentence-transformers models
 RUN mkdir -p /app/.cache/huggingface && \
