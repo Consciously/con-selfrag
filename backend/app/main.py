@@ -1,4 +1,13 @@
 """
+# =============================================================================
+# Project: Selfrag
+# Module: Memory Service (Phase 3)
+# File: main.py
+# Purpose: Integrate memory routes into application startup.
+# Owner: Core Platform (RAG + Memory)
+# Status: Draft (Phase 3) | Created: 2025-08-08
+# Notes: Keep Agents out. Coordinator only routes. No external tools.
+# =============================================================================
 FastAPI application with clean, extensible architecture and structured logging.
 Enhanced with Performance & Caching Layer for optimal throughput and response times.
 Features API versioning, gRPC support, and enhanced error handling.
@@ -29,6 +38,7 @@ from .api.v1 import v1_router
 
 # Import legacy route modules for backward compatibility
 from .routes import auth, debug, health, ingest, llm, query, rag, rate_limits, status
+from .routes.memory_routes import router as memory_router
 
 # gRPC server management (optional)
 try:
@@ -141,6 +151,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include memory routes (Phase 3 - Memory Service)
+app.include_router(memory_router, prefix="/memory", tags=["memory"])
 
 # Add request logging middleware
 @app.middleware("http")

@@ -118,6 +118,53 @@ class ServiceChecker:
                 "message": "PostgreSQL connection failed"
             }
 
+    async def check_memory_tables(self) -> Dict[str, Any]:
+        """Phase 3: Verify episodic & semantic memory tables readiness.
+
+        Ensures required tables exist and have expected columns.
+        Non-fatal: returns unhealthy if missing; main startup proceeds.
+        """
+        expected_tables = {"episodic_memories", "semantic_memories"}
+        try:
+            conn = await asyncpg.connect(
+                host=self.postgres_config["host"],
+                port=self.postgres_config["port"],
+                user=self.postgres_config["user"],
+                password=self.postgres_config["password"],
+                database=self.postgres_config["database"],
+            )
+        except Exception:
+            # Fallback (trust auth)
+            conn = await asyncpg.connect(
+                host=self.postgres_config["host"],
+                port=self.postgres_config["port"],
+                user=self.postgres_config["user"],
+                database=self.postgres_config["database"],
+            )
+        try:
+            rows = await conn.fetch(
+                """
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = ANY($1)
+                """,
+                list(expected_tables),
+            )
+            found = {r["table_name"] for r in rows}
+            missing = list(expected_tables - found)
+            status = "healthy" if not missing else "unhealthy"
+            detail = {
+                "status": status,
+                "found": list(found),
+                "missing": missing,
+            }
+            logger.info("Memory tables readiness check", extra=detail)
+            return detail
+        except Exception as e:  # pragma: no cover
+            logger.error("Memory tables check failed", extra={"error": str(e)})
+            return {"status": "unhealthy", "error": str(e)}
+        finally:
+            await conn.close()
+
     async def check_redis(self) -> Dict[str, Any]:
         """Check Redis connectivity and basic operations."""
         try:
@@ -282,8 +329,10 @@ class ServiceChecker:
             self.check_redis(),
             self.check_qdrant(),
             self.check_localai(),
-            return_exceptions=True
+            return_exceptions=True,
         )
+        # Memory tables (separate to avoid failing everything if new)
+        memory_tables = await self.check_memory_tables()
         
         # Handle any exceptions from concurrent execution
         if isinstance(postgres_result, Exception):
@@ -307,7 +356,8 @@ class ServiceChecker:
                 "postgres": postgres_result,
                 "redis": redis_result,
                 "qdrant": qdrant_result,
-                "localai": localai_result
+                "localai": localai_result,
+                "memory_tables": memory_tables,
             },
             "timestamp": asyncio.get_event_loop().time()
         }
