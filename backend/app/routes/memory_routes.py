@@ -11,7 +11,7 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 
 from ..api.schemas.memory import (
     LogTurnRequest,
@@ -19,10 +19,11 @@ from ..api.schemas.memory import (
     CreateFactRequest,
     SearchFactsRequest,
     UpdateFactRequest,
-    TurnList,
     FactList,
     Fact,
     Turn,
+    CreatedIdResponse,
+    ErrorResponse,
 )
 from ..middleware.auth import get_current_active_user
 from ..services.memory_service import memory_service
@@ -34,11 +35,16 @@ router = APIRouter()
 
 @router.post(
     "/log",
-    response_model=str,
+    response_model=CreatedIdResponse,
+    responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Log a conversational turn (episodic memory)",
-    description="Stores a single conversation turn after redaction."
+    description="Stores a single conversation turn after redaction. Idempotent if X-Idempotency-Key provided."
 )
-async def log_turn(req: LogTurnRequest, user=Depends(get_current_active_user)):
+async def log_turn(
+    req: LogTurnRequest,
+    user=Depends(get_current_active_user),
+    x_idempotency_key: str | None = Header(None, alias="X-Idempotency-Key"),
+):
     try:
         rec_id = await memory_service.log_turn(
             user_id=str(user.id),
@@ -46,64 +52,81 @@ async def log_turn(req: LogTurnRequest, user=Depends(get_current_active_user)):
             role=req.role,
             content=req.content,
             tags=req.tags,
+            idem_key=x_idempotency_key,
         )
-        return rec_id
+        return CreatedIdResponse(id=rec_id)
     except ValueError as ve:
-        raise HTTPException(status_code=422, detail=str(ve))
+        raise HTTPException(status_code=422, detail={"detail": str(ve), "code": "VALIDATION_ERROR"})
     except Exception as e:  # pragma: no cover
         logger.error("Failed to log turn", extra={"error": str(e)}, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to log turn")
+        raise HTTPException(status_code=500, detail={"detail": "Failed to log turn", "code": "INTERNAL_ERROR"})
 
 
 @router.post(
     "/retrieve",
-    response_model=TurnList,
+    response_model=dict,
+    responses={500: {"model": ErrorResponse}},
     summary="Retrieve recent turns",
     description="Returns last N turns for a session (most recent first)",
 )
 async def retrieve_turns(req: RetrieveTurnsRequest, user=Depends(get_current_active_user)):
-    rows = await memory_service.retrieve_recent_turns(
-        user_id=str(user.id), session_id=req.session_id, limit=req.limit or 10
-    )
-    return TurnList(
-        turns=[Turn(**r) for r in rows],
-        total=len(rows),
-    )
+    try:
+        rows = await memory_service.retrieve_recent_turns(
+            user_id=str(user.id), session_id=req.session_id, limit=req.limit or 10
+        )
+        return {"items": [Turn(**r) for r in rows], "total": len(rows)}
+    except Exception as e:  # pragma: no cover
+        logger.error("Failed to retrieve turns", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail={"detail": "Failed to retrieve", "code": "INTERNAL_ERROR"})
 
 
 @router.post(
     "/facts",
-    response_model=str,
+    response_model=CreatedIdResponse,
     status_code=status.HTTP_201_CREATED,
+    responses={422: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Create semantic fact",
-    description="Creates a semantic memory entry (fact / note).",
+    description="Creates a semantic memory entry (fact / note). Idempotent if X-Idempotency-Key provided.",
 )
-async def create_fact(req: CreateFactRequest, user=Depends(get_current_active_user)):
-    rec_id = await memory_service.create_fact(
-        user_id=str(user.id),
-        title=req.title,
-        body=req.body,
-        tags=req.tags,
-        source_ref=req.source_ref,
-    )
-    return rec_id
+async def create_fact(
+    req: CreateFactRequest,
+    user=Depends(get_current_active_user),
+    x_idempotency_key: str | None = Header(None, alias="X-Idempotency-Key"),
+):
+    try:
+        rec_id = await memory_service.create_fact(
+            user_id=str(user.id),
+            title=req.title,
+            body=req.body,
+            tags=req.tags,
+            source_ref=req.source_ref,
+            idem_key=x_idempotency_key,
+        )
+        return CreatedIdResponse(id=rec_id)
+    except ValueError as ve:
+        raise HTTPException(status_code=422, detail={"detail": str(ve), "code": "VALIDATION_ERROR"})
+    except Exception as e:  # pragma: no cover
+        logger.error("Failed to create fact", extra={"error": str(e)}, exc_info=True)
+        raise HTTPException(status_code=500, detail={"detail": "Failed to create fact", "code": "INTERNAL_ERROR"})
 
 
 @router.get(
     "/facts/{memory_id}",
     response_model=Fact,
+    responses={404: {"model": ErrorResponse}},
     summary="Get fact by ID",
 )
 async def get_fact(memory_id: str, user=Depends(get_current_active_user)):
     fact = await memory_service.get_fact(user_id=str(user.id), memory_id=memory_id)
     if not fact:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail={"detail": "Not found", "code": "NOT_FOUND"})
     return Fact(**fact)
 
 
 @router.post(
     "/facts/search",
     response_model=FactList,
+    responses={422: {"model": ErrorResponse}},
     summary="Search semantic facts",
     description="Simple ILIKE-based text search over title and body.",
 )
@@ -111,17 +134,18 @@ async def search_facts(req: SearchFactsRequest, user=Depends(get_current_active_
     rows = await memory_service.search_facts(
         user_id=str(user.id), query=req.query, limit=req.limit or 20
     )
-    return FactList(facts=[Fact(**r) for r in rows], total=len(rows))
+    return FactList(items=[Fact(**r) for r in rows], total=len(rows))
 
 
 @router.patch(
     "/facts/{memory_id}",
-    response_model=bool,
+    response_model=Fact,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
     summary="Update fact",
 )
 async def update_fact(memory_id: str, req: UpdateFactRequest, user=Depends(get_current_active_user)):
     if req.id != memory_id:
-        raise HTTPException(status_code=400, detail="ID mismatch")
+        raise HTTPException(status_code=400, detail={"detail": "ID mismatch", "code": "BAD_REQUEST"})
     updated = await memory_service.update_fact(
         user_id=str(user.id),
         memory_id=memory_id,
@@ -129,14 +153,29 @@ async def update_fact(memory_id: str, req: UpdateFactRequest, user=Depends(get_c
         body=req.body,
         tags=req.tags,
     )
-    return updated
+    if not updated:
+        raise HTTPException(status_code=404, detail={"detail": "Not found", "code": "NOT_FOUND"})
+    return Fact(**updated)
 
 
 @router.delete(
     "/facts/{memory_id}",
-    response_model=bool,
+    response_model=dict,
+    responses={404: {"model": ErrorResponse}},
     summary="Delete fact",
 )
 async def delete_fact(memory_id: str, user=Depends(get_current_active_user)):
     deleted = await memory_service.delete_fact(user_id=str(user.id), memory_id=memory_id)
-    return deleted
+    if not deleted:
+        raise HTTPException(status_code=404, detail={"detail": "Not found", "code": "NOT_FOUND"})
+    return {"deleted": True}
+
+
+@router.get(
+    "/health",
+    response_model=dict,
+    summary="Memory subsystem health",
+)
+async def memory_health():
+    ok = await memory_service.health()
+    return {"status": "ok" if ok else "degraded"}
