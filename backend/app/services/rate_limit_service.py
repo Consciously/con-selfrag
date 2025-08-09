@@ -95,6 +95,43 @@ class RateLimitService:
                 requests_per_day=20000,
                 burst_allowance=20
             ),
+            # Memory service endpoints
+            "POST /memory/log": RateLimitConfig(
+                requests_per_minute=120,
+                requests_per_hour=3000,
+                requests_per_day=20000,
+                burst_allowance=10
+            ),
+            "POST /memory/retrieve": RateLimitConfig(
+                requests_per_minute=240,
+                requests_per_hour=5000,
+                requests_per_day=30000,
+                burst_allowance=20
+            ),
+            "POST /memory/facts": RateLimitConfig(
+                requests_per_minute=60,
+                requests_per_hour=2000,
+                requests_per_day=15000,
+                burst_allowance=10
+            ),
+            "POST /memory/facts/search": RateLimitConfig(
+                requests_per_minute=120,
+                requests_per_hour=3000,
+                requests_per_day=20000,
+                burst_allowance=15
+            ),
+            "PATCH /memory/facts/{memory_id}": RateLimitConfig(
+                requests_per_minute=60,
+                requests_per_hour=1500,
+                requests_per_day=10000,
+                burst_allowance=5
+            ),
+            "DELETE /memory/facts/{memory_id}": RateLimitConfig(
+                requests_per_minute=60,
+                requests_per_hour=1500,
+                requests_per_day=10000,
+                burst_allowance=5
+            ),
         }
         
         # User tier configurations (for authenticated users)

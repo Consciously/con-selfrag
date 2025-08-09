@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional, List, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 RoleLiteral = Literal["user", "assistant", "system"]
 
@@ -38,8 +38,16 @@ class CreateFactRequest(BaseModel):
 
 
 class SearchFactsRequest(BaseModel):
-    query: str
+    query: str = Field(..., min_length=2, description="Full-text substring (ILIKE) match over title/body")
     limit: Optional[int] = Field(20, ge=1, le=100)
+
+    @field_validator("query")
+    @classmethod
+    def _strip(cls, v: str) -> str:  # noqa: D401
+        v2 = v.strip()
+        if len(v2) < 2:
+            raise ValueError("query must be at least 2 characters")
+        return v2
 
 
 class UpdateFactRequest(BaseModel):
@@ -69,10 +77,14 @@ class Fact(BaseModel):
 
 
 class FactList(BaseModel):
-    facts: List[Fact]
+    items: List[Fact]
     total: int
 
 
-class TurnList(BaseModel):
-    turns: List[Turn]
-    total: int
+class ErrorResponse(BaseModel):
+    detail: str
+    code: str
+
+
+class CreatedIdResponse(BaseModel):
+    id: str
