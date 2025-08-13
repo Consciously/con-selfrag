@@ -1,0 +1,114 @@
+version: '3.9'
+
+services:
+  fastapi-gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fastapi-gateway
+    env_file: .env
+    ports:
+      - '${MAIN_API_PORT:-8080}:8000'
+    depends_on:
+      - postgres
+      - redis
+      - qdrant
+      - localai
+    networks:
+      - llm-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  localai:
+    image: localai/localai:latest
+    container_name: localai
+    env_file: .env
+    volumes:
+      - ${LOCALAI_MODELS_PATH:-./models}:/models
+    ports:
+      - '${LOCALAI_PORT:-8081}:8080'
+    networks:
+      - llm-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8080/readyz']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - '${QDRANT_PORT:-6333}:6333'
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - llm-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:6333/health']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-con_selfrag}
+      POSTGRES_USER: ${POSTGRES_USER:-con_selfrag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-con_selfrag_password}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - llm-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-con_selfrag}']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    networks:
+      - llm-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - '${MINIO_API_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - minio-data:/data
+    networks:
+      - llm-network
+
+networks:
+  llm-network:
+    driver: bridge
+
+volumes:
+  qdrant-data:
+  postgres-data:
+  minio-data:
+  # LocalAI & Redis may use named volumes if desired
+  # localai-data:
+  # redis-data:
